@@ -71,12 +71,15 @@ servers, and never mutates Pi package settings.
       conflicts always block; dry-run no-write; malformed config stops
 - [x] Checks: typecheck, lint, test (45 passing), build
 
-### Task 3 — add command [pending]
-- [ ] RED: tests/unit/cli/add.test.ts
-- [ ] GREEN: src/cli/commands/add.ts; positional presets; unknown preset
-      error listing valid ids; creates or extends via same pipeline;
-      --project/--dry-run/--yes
-- Route: delegated.
+### Task 3 — add command [done]
+- [x] RED: tests/unit/cli/add.test.ts failed against exit-2 stub (8 tests)
+- [x] GREEN: src/cli/commands/add.ts noninteractive create-or-extend via shared
+      pipeline; src/cli/format.ts shared plan/conflict formatting (init updated
+      to import, no behavior change); usage error / unknown preset listing /
+      conflict block / malformed stop / dry-run semantics
+- [x] Parent note: stale stub assertion in tests/unit/cli.test.ts updated by
+      parent (add → usage-error exit 1; check/install stay exit 2 until T4/T5)
+- [x] Checks: typecheck, lint, test (54 passing), build
 
 ### Task 4 — check command [pending]
 - [ ] RED: tests/unit/cli/check.test.ts + executables tests

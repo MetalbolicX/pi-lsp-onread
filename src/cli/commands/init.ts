@@ -7,7 +7,7 @@ import type { SourceConfig } from "../../config/types.js";
 import { PRESETS } from "../../presets/catalog.js";
 import { detectManifestPresets } from "../manifests.js";
 import { buildUpdatedSource, planAdditions, writeConfig } from "../generate.js";
-import type { Addition } from "../generate.js";
+import { printConflict, printPlan } from "../format.js";
 
 interface InitOptions {
 	stdin?: Readable & { isTTY?: boolean };
@@ -39,20 +39,6 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
 		else return { projectRoot, dryRun, yes, error: `Unknown init option '${argument}'.` };
 	}
 	return { projectRoot, ...(languages ? { languages } : {}), dryRun, yes };
-}
-
-function printPlan(additions: Addition[], path: string, hasExistingConfig: boolean): void {
-	const added = additions.filter((item) => item.status === "NEW").map((item) => item.serverId);
-	const noops = additions.filter((item) => item.status === "NOOP").map((item) => item.serverId);
-	console.log(`Target: ${path}`);
-	console.log(`Added: ${added.length ? added.join(", ") : "none"}; no-op: ${noops.length ? noops.join(", ") : "none"}.`);
-	if (!hasExistingConfig) console.log(`A schema companion will be created at ${join(resolve(path, ".."), "lsp.schema.json")}.`);
-}
-
-function printConflict(addition: Extract<Addition, { status: "CONFLICT" }>): void {
-	console.error(`Conflict for '${addition.serverId}':`);
-	console.error(`Existing: ${JSON.stringify(addition.existing, null, 2)}`);
-	console.error(`Incoming: ${JSON.stringify(addition.incoming, null, 2)}`);
 }
 
 async function readExistingConfig(path: string): Promise<{ source?: SourceConfig; error?: string }> {

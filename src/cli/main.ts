@@ -22,7 +22,8 @@ function usage(): string {
 		"Usage:",
 		"  pi-lsp-onread init [--project <path>] [--languages a,b] [--dry-run] [--yes]",
 		"                                  Create or extend .pi/lsp.json",
-		"  pi-lsp-onread add <preset...>     Add language presets to config (planned)",
+		"  pi-lsp-onread add <preset...> [--project <path>] [--dry-run] [--yes]",
+		"                                  Add language presets to config non-interactively",
 		"  pi-lsp-onread list                List available language presets",
 		"  pi-lsp-onread check               Validate config and PATH availability (planned)",
 		"  pi-lsp-onread install [--local]   Register the Pi extension via pi install (planned)",
@@ -56,7 +57,7 @@ export async function main(argv: readonly string[]): Promise<number> {
 		case "init":
 			return init(argv.slice(1));
 		case "add":
-			return add();
+			return add(argv.slice(1));
 		case "check":
 			return check();
 		case "install":

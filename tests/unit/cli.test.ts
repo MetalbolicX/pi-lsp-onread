@@ -19,8 +19,12 @@ describe("cli", () => {
 		expect(await main(["bogus"])).toBe(1);
 	});
 
+	it("rejects add without presets as a usage error", async () => {
+		expect(await main(["add"])).toBe(1);
+	});
+
 	it("keeps the remaining planned commands as unimplemented", async () => {
-		for (const command of ["add", "check", "install"]) {
+		for (const command of ["check", "install"]) {
 			expect(await main([command])).toBe(2);
 		}
 	});
