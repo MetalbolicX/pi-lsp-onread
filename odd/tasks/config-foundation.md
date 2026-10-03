@@ -94,12 +94,14 @@ per odd/tasks/scaffold.md and re-verified at Task 1 start.)
 
 ## Delivery
 
-- Strategy: ask-on-risk (default). Forecast ≈ 950 authored lines (T1 ~150,
-  T2 ~500, T3 ~300) → oversized-delivery menu fires once before the commit
-  that crosses ~400 accumulated authored lines.
-- Work-unit commit per task on `feat/scaffold`; push/PR/merge stay with user.
-- RDD: on. Assess after each work-unit commit (first boundary 208cdfe);
-  record tier + outcome per task.
+- Strategy: ask-on-risk (default)… user selected feature-branch-chain at the
+  ~400-line menu (cached). Push/PR/merge remain user decisions.
+
+## Follow-ups
+
+- R3-001 (advisory, non-blocking, from native review): src/workspace/match.ts:23
+  — reliability WARNING, informational. Separate later work; never reopens the
+  approved review.
 
 ## Progress log
 
@@ -116,3 +118,12 @@ per odd/tasks/scaffold.md and re-verified at Task 1 start.)
   RED observed before implementation. RDD assess: medium
   (configuration_change package.json), writer large → writer self-verification
   stands; reviewDue at slice close. Boundary: 96ee643 → a64cf3c.
+- 2026-10-02: Task 3 done. Work-unit commit 53054a5 (233 authored lines).
+  RED observed. RDD assess: medium, writer large, under per-commit budget.
+- 2026-10-02: Slice close. Native ordinary review START (committed range
+  208cdfe..53054a5): lineage review-25c86ba831a74976, tier medium, lens
+  review-reliability, 33 changed files / 1711 changed lines, correction budget
+  200. Reviewer run acknowledged after forecast; outcome APPROVED with one
+  non-blocking advisory (R3-001). Acknowledgement executed: authority burned
+  (gentle-ai.review-acknowledged/v1). Delivery follows ordinary repository
+  policy. Feature complete: T1+T2+T3 all done, all checks green.
