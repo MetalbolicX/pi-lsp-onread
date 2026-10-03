@@ -27,6 +27,11 @@ describe("static executable discovery", () => {
 		expect(await findExecutable("gopls", root, bin)).toBeUndefined();
 	});
 
+	it("treats a non-string PATH value as empty", async () => {
+		const root = await tempRoot();
+		await expect(findExecutable("gopls", root, null as unknown as string)).resolves.toBeUndefined();
+	});
+
 	it("resolves path-bearing commands against the project root", async () => {
 		const root = await tempRoot();
 		const bin = join(root, "tools");

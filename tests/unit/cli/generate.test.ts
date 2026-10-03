@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -96,6 +96,16 @@ describe("CLI config generation", () => {
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.summary).toMatch(/go.*python/);
 		await expect(readdir(join(projectRoot, ".pi"))).rejects.toMatchObject({ code: "ENOENT" });
+	});
+
+	it("cleans up the temporary config when replacing the destination fails", async () => {
+		const projectRoot = await tempRoot();
+		const directory = join(projectRoot, ".pi");
+		await mkdir(directory);
+		await mkdir(join(directory, "lsp.json"));
+		const result = await writeConfig({ projectRoot, source: { version: 1 }, dryRun: false });
+		expect(result.ok).toBe(false);
+		expect((await readdir(directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
 	});
 
 	it("atomically writes parseable JSON at .pi/lsp.json", async () => {

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { RuntimeSession } from "../../../src/runtime/session.js";
+import type { LspClient } from "../../../src/lsp/client.js";
 import { fakeConfig } from "./runtime-test-helpers.js";
 
 const directories: string[] = [];
@@ -30,6 +31,16 @@ describe("RuntimeSession", () => {
 		} finally {
 			await session.dispose();
 		}
+	});
+
+	it("continues disposing pooled clients when one disposal rejects", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const disposed: string[] = [];
+		session.pool.set("first", { dispose: async () => { disposed.push("first"); throw new Error("failed"); } } as unknown as LspClient);
+		session.pool.set("second", { dispose: async () => { disposed.push("second"); } } as unknown as LspClient);
+		await expect(session.dispose()).resolves.toBeUndefined();
+		expect(disposed).toEqual(["first", "second"]);
 	});
 
 	it("retains config errors as a typed inactive condition", async () => {

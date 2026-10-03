@@ -22,6 +22,7 @@ export async function findExecutable(command: string, projectRoot: string, pathE
 		return await isAvailable(candidate) ? candidate : undefined;
 	}
 
+	if (typeof pathEnv !== "string") return undefined;
 	for (const directory of pathEnv.split(delimiter)) {
 		if (!directory) continue;
 		const candidate = resolve(directory, command);

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import schema from "../../schema/lsp.schema.json" with { type: "json" };
@@ -103,8 +103,23 @@ export async function writeConfig(options: WriteConfigOptions): Promise<WriteCon
 		const directory = join(options.projectRoot, ".pi");
 		await mkdir(directory, { recursive: true });
 		const temporaryPath = join(directory, `.lsp.json.${randomUUID()}.tmp`);
-		await writeFile(temporaryPath, `${JSON.stringify(prepared.source, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-		await rename(temporaryPath, path);
+		try {
+			const temporaryFile = await open(temporaryPath, "wx");
+			try {
+				await temporaryFile.writeFile(`${JSON.stringify(prepared.source, null, 2)}\n`, "utf8");
+				await temporaryFile.sync();
+			} finally {
+				await temporaryFile.close();
+			}
+			await rename(temporaryPath, path);
+		} catch (error) {
+			try {
+				await unlink(temporaryPath);
+			} catch {
+				// The temporary file may not have been created or may already have been renamed.
+			}
+			throw error;
+		}
 		if (prepared.companion !== undefined) {
 			await writeFile(join(directory, "lsp.schema.json"), prepared.companion, "utf8");
 		}

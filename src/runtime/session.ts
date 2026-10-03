@@ -139,7 +139,7 @@ export class RuntimeSession {
 		const clients = [...this.pool.values()];
 		this.pool.clear();
 		this.pendingSnapshots.clear();
-		await Promise.all(clients.map((client) => client.dispose()));
+		await Promise.allSettled(clients.map((client) => client.dispose()));
 	}
 }
 
