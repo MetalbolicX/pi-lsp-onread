@@ -74,7 +74,14 @@ attach cached nonblocking (pending if none) / edit path = bounded wait for
 fresh publication matching current version within waitMs, then attach.
 dispose() kills children. Tests with fake server fixture. Route: delegated.
 
-### T4 — Pi hooks + results + extension wiring (test-first) [pending]
+### T4 — Pi hooks + results + extension wiring (test-first) [done]
+- [x] SDK explored: async tool_result transform + session_shutdown supported
+- [x] GREEN: src/pi/{hooks,results}.ts + real src/extension.ts factory —
+      read results nonblocking (cached at handler time + background warmup),
+      edit/write await activation (bounded by waitMs), lazy session on first
+      event (no spawn in factory), disposal on session_shutdown, failures
+      never break the tool call; README extension section
+- [x] Checks: typecheck, lint, test (119 passing), build
 src/pi/{hooks,results}.ts + src/extension.ts: worker MUST read installed Pi
 SDK docs (docs/extensions.md under the pi-coding-agent package) and types,
 use the exact supported event/tool_result augmentation API, and STOP with a

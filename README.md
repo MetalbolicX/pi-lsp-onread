@@ -2,7 +2,7 @@
 
 Pi extension that activates project-configured LSP servers when the agent reads code, and feeds language-server diagnostics back to the agent — OpenCode-style, but configuration-first and diagnostics-first.
 
-Status: **early implementation** — the CLI generates project LSP configuration; runtime activation and diagnostics are still in development.
+Status: **early implementation** — project LSP configuration, runtime activation, and diagnostic feedback are implemented.
 
 ## Design (settled)
 
@@ -29,6 +29,12 @@ The CLI generates LSP configuration only. It does not download, install, or laun
 Trust is a fully noninteractive explicit allowlist: only exact canonical roots are trusted, so trusting a parent does **not** trust nested projects. The store is `~/.pi/agent/lsp.trust.json`; it is user-owned and is never granted by project configuration. Malformed store data names the file and blocks changes rather than resetting it. Trust commands exit **0** on success and **1** on errors.
 
 Exit code **0** means success (including a successful dry-run); **1** means an error, conflict, or check finding. The former exit-2 unimplemented-command stubs are gone.
+
+## Pi extension
+
+The extension listens for successful Pi `read`, `edit`, and `write` tool results. It creates its runtime session lazily on the first matching file result; loading the extension does not start language-server processes. Servers start only for files matched by effective configuration and roots explicitly trusted in `~/.pi/agent/lsp.trust.json` (use `pi-lsp-onread trust add [path]` to authorize an exact canonical project root). Untrusted roots never spawn servers and receive the runtime's trust guidance.
+
+Reads launch activation in the background and immediately attach any cached diagnostics; the current read does not wait for startup or diagnostics, so a later result can benefit from the warm-up. Edit and write results wait according to the effective `diagnostics.waitMs` budget (default 5000 ms) before attaching diagnostics. Feedback includes freshness/pending information and never treats silence as a clean compile. Failed Pi tool results are left untouched. Configuration, activation, or disposal errors are logged and swallowed so diagnostics never break the underlying tool call. Session resources are disposed on Pi's `session_shutdown` event.
 
 ## Development
 
