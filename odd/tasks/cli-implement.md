@@ -132,6 +132,18 @@ servers, and never mutates Pi package settings.
 - RDD: on. Assess after each work-unit commit (first boundary 33713bf);
   native review at slice close.
 
+## Follow-ups
+
+All advisory, non-blocking, from the approved four-lens native review
+ (never reopens it; separate later work):
+
+- R1-001 (risk): src/cli/generate.ts:107 — WARNING, informational.
+- R2-001 (readability): src/cli/commands/add.ts:28 — SUGGESTION.
+- R3-001 (reliability): src/cli/executables.ts:5-9 — WARNING.
+- R3-002 (reliability): src/cli/generate.ts:106-108 — WARNING.
+- R4-001 (resilience): src/cli/generate.ts:105-107 — WARNING.
+- (Prior slice) R3-001: src/workspace/match.ts:23 — informational.
+
 ## Progress log
 
 - 2026-10-02: feature opened before first write; branch feat/cli-implement
@@ -148,3 +160,12 @@ servers, and never mutates Pi package settings.
   deterministic init-test timeout. Fix 5c1c083 (39) — assess medium.
 - 2026-10-02: Slice complete: 5 tasks + fix, 6 commits, ~1220 authored lines,
   69 tests / 14 files, all checks green. Slice review at close.
+- 2026-10-02: Slice review (33713bf..9c91a4e, docs commit included): lineage
+  review-ad7815b93cfd33e1, HIGH tier (process_boundary pi-runner), four
+  lenses risk/resilience/readability/reliability, 20 files / 1442 lines,
+  correction budget 200. One parent transcription error in a group binding
+  was rejected without mutation; fresh STATUS + verbatim resubmit succeeded.
+  Outcome APPROVED (4/4 reviewers); 5 advisory findings recorded above.
+  Acknowledgement executed: authority burned. Delivery: ordinary repository
+  policy; feat/cli-implement → feat/scaffold chain; push/PR/merge are user
+  decisions. Feature COMPLETE.
