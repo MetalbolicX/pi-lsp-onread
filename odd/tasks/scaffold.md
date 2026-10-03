@@ -14,19 +14,24 @@ Toolchain (user-selected): pnpm, TypeScript, rolldown bundler, vitest, oxlint �
 ## Tasks
 
 - [x] T1 Init git repo + feature doc (this file) — branch `feat/scaffold`
-- [ ] T2 Package manifest + TypeScript toolchain (package.json, tsconfig.json, rolldown.config.js, .gitignore, LICENSE)
-- [ ] T3 Source skeleton: extension entry, CLI entry, preset catalog, v1 schema, tests
-- [ ] T4 Install dependencies (pnpm)
-- [ ] T5 Verify: typecheck + lint + test + build
-- [ ] T6 Record evidence + work-unit commit
+- [x] T2 Package manifest + TypeScript toolchain (package.json, tsconfig.json, rolldown.config.js, .gitignore, LICENSE)
+- [x] T3 Source skeleton: extension entry, CLI entry, preset catalog, v1 schema, tests
+- [x] T4 Install dependencies (pnpm)
+- [x] T5 Verify: typecheck + lint + test + build
+- [x] T6 Record evidence + work-unit commit
 
 ## Verification evidence
 
-- (pending)
+- `pnpm typecheck` (tsc --noEmit, strict): clean
+- `pnpm lint` (oxlint): clean
+- `pnpm test` (vitest): 2 files, 11/11 passed
+- `pnpm build` (rolldown): dist/extension.js + dist/cli.js produced
+- CLI smoke: `node dist/cli.js list` renders the catalog; `--version` prints 0.0.1
+- Note: pnpm 12 no longer reads the `pnpm` field in package.json; build-script denials are recorded in pnpm-workspace.yaml (`allowBuilds`), recorded via `pnpm approve-builds '!pkg'`
 
 ## Commit identity
 
-- (pending)
+- Work-unit commit: `811f299` — feat: scaffold pi-lsp-onread package with TypeScript toolchain (branch `feat/scaffold`)
 
 ## Decisions locked from design discussion
 
