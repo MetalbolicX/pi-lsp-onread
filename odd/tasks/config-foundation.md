@@ -66,14 +66,13 @@ vertical slice and CLI generation wiring are later features.
 - [x] Checks: typecheck, lint, test (20 passing), build
 - Route: delegated (gentle-ai-worker; multi-file write trigger).
 
-### Task 3 — Workspace module (test-first) [pending]
-- [ ] RED: `tests/unit/workspace/{paths,roots,match}.test.ts`
-- [ ] GREEN: `src/workspace/{paths,roots,match}.ts`
-- [ ] paths: file URI conversion with correct percent-encoding
-- [ ] roots: nearest ancestor with any rootMarker within project root,
-      fallback project root
-- [ ] match: extension match + scalar-or-map languageId; enabled servers only
-- [ ] Checks: typecheck, lint, test, build
+### Task 3 — Workspace module (test-first) [done]
+- [x] RED: `tests/unit/workspace/{paths,roots,match}.test.ts` failed against missing modules
+- [x] GREEN: `src/workspace/{paths,roots,match}.ts` (pure, dependency-free, injectable fs checks)
+- [x] paths: URI conversion with percent-encoding + round-trip; canonicalize reused by roots
+- [x] roots: nearest-marker within project boundary, no escape above projectRoot, fallback projectRoot
+- [x] match: case-insensitive extension match, scalar/map languageId, enabled only, lsp:false → [], insertion order
+- [x] Checks: typecheck, lint, test (28 passing), build
 - Route: delegated (gentle-ai-worker; multi-file write trigger).
 
 ## Verification evidence
@@ -88,6 +87,10 @@ per odd/tasks/scaffold.md and re-verified at Task 1 start.)
   missing module); `pnpm typecheck` exit 0; `pnpm lint` exit 0; `pnpm test`
   exit 0, 20 tests (11 existing + 9 config… 20 total across 5 files);
   `pnpm build` exit 0; parent re-ran `pnpm test` → 20 passing.
+- Task 3 (worker + parent spot check): RED observed (workspace tests failed
+  on missing modules); `pnpm typecheck` exit 0; `pnpm lint` exit 0; `pnpm test`
+  exit 0, 28 tests across 8 files; `pnpm build` exit 0; parent re-ran
+  `pnpm test` → 28 passing.
 
 ## Delivery
 
@@ -109,3 +112,7 @@ per odd/tasks/scaffold.md and re-verified at Task 1 start.)
   ask-on-risk menu fired once; user selected feature-branch-chain
   (chain_strategy=feature-branch-chain). Cached. PR chain creation remains a
   separate user decision.
+- 2026-10-02: Task 2 done. Work-unit commit a64cf3c (461 authored lines).
+  RED observed before implementation. RDD assess: medium
+  (configuration_change package.json), writer large → writer self-verification
+  stands; reviewDue at slice close. Boundary: 96ee643 → a64cf3c.
