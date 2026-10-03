@@ -56,7 +56,15 @@ filter + global maxItems/maxChars; format renders agent-facing block with
 freshness labels and pending indicator, never "clean compilation" claims.
 Pure. Route: delegated.
 
-### T3 — Runtime session + activation (test-first) [pending]
+### T3 — Runtime session + activation (test-first) [done]
+- [x] RED observed; GREEN: src/runtime/{session,activation}.ts — pooled lazy
+      clients keyed serverId::canonicalRoot, canonical-root trust gate BEFORE
+      any client creation (untrusted → guidance, pool untouched), read path
+      never waits (pending on first use), edit path bounded single waitMs
+      budget across servers matching current doc version (versionless
+      publications → unknown freshness), per-server failure lines without
+      aborting siblings, injectable client/fs/clock seams, dispose kills all
+- [x] Checks: typecheck, lint, test (114 passing), build
 src/runtime/{session,activation}.ts: session owns effective config, trust
 store, pool (serverId+root), diagnostics store; activate(filePath, event):
 resolve root (workspace/roots), match (workspace/match), authorize
