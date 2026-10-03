@@ -54,3 +54,10 @@ whose safe fix would be a redesign stays unchanged and reported.)
 
 - 2026-10-02: feature opened before first write; inventory compiled from the
   four feature documents' Follow-ups sections.
+- 2026-10-02: T1 f873612 (103 lines): 4 fixes (fsync+temp-cleanup write path,
+  non-string PATH guard, allSettled disposal) with 3 new regression tests;
+  9 advisories left unchanged with documented reasons. 122 tests green.
+  Assess medium. Slice review: lineage review-71c8c5de4c3783ff, medium,
+  review-reliability lens → APPROVED, acknowledgement burned. One new
+  informational advisory (session.ts:142) recorded for a future pass.
+  Feature COMPLETE; merge to main is a user decision.
