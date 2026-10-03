@@ -105,6 +105,26 @@ servers, and never mutates Pi package settings.
 
 (Per task as `<command>: <result>`; baseline: 33713bf all green, 28 tests.)
 
+- T1 (worker + parent spot check): RED observed; typecheck/lint/build exit 0;
+  `pnpm test` 35 passing; parent re-ran test → 35.
+- T2 (worker + parent spot check): RED against stub; async main seam change
+  parent-approved; typecheck/lint/build exit 0; `pnpm test` 45 passing;
+  parent re-ran test → 45.
+- T3 (worker, then parent): RED 8 tests; worker full-suite partial on stale
+  stub assertion; parent updated tests/unit/cli.test.ts (add → usage exit 1;
+  check/install remain stubs); typecheck + full `pnpm test` 54 → green.
+- T4 (worker + parent spot check): RED 16 tests; typecheck/lint/build exit 0;
+  `pnpm test` 64 passing; parent re-ran test → 64.
+- T5 (worker + parent): RED 6 tests; typecheck/lint/build exit 0; `pnpm test`
+  69 × 2 runs; RDD assess HIGH (process_boundary shell_process) → independent
+  gentle-ai-verify run REQUIRED and executed: process boundary MITIGATED
+  (array args, no shell, injectable runner, dry-run no-spawn verified live,
+  static PATH detection); verifier exposed deterministic init-test timeout
+  (2/2 runs) pre-existing from T2.
+- Test-race fix 5c1c083 (worker): root cause fixed-delay staged input racing
+  readline prompt registration; prompt-staged input; 5× focused + 3× full
+  suite green (69); parent spot check 69; assess medium (test-only).
+
 ## Delivery
 
 - Cached strategy: feature-branch-chain (user choice, config-foundation
@@ -116,3 +136,15 @@ servers, and never mutates Pi package settings.
 
 - 2026-10-02: feature opened before first write; branch feat/cli-implement
   created from 33713bf; tasks 1–5 defined.
+- 2026-10-02: T1 48c3fb2 (337 lines) — assess medium.
+- 2026-10-02: T2 8dc99e8 (431) — parent-approved async main seam; assess
+  medium; slice budget reached (cached feature-branch-chain applies).
+- 2026-10-02: T3 b0ee506 (252) — parent updated stale stub assertion; assess
+  medium after parent corrected a mis-transcribed baseRef SHA.
+- 2026-10-02: T4 8269dfe (261) — assess medium after second SHA correction
+  (always rev-parse, never hand-copy).
+- 2026-10-02: T5 55f6251 (200) — assess HIGH (process_boundary) → mandatory
+  independent verifier run executed; boundary mitigated; verifier found
+  deterministic init-test timeout. Fix 5c1c083 (39) — assess medium.
+- 2026-10-02: Slice complete: 5 tasks + fix, 6 commits, ~1220 authored lines,
+  69 tests / 14 files, all checks green. Slice review at close.
