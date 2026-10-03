@@ -51,6 +51,18 @@ export class LspClient {
 	constructor(private readonly child: ChildProcess, private readonly options: ClientOptions) {
 		if (!child.stdout || !child.stdin) throw new Error("LSP child must have piped stdin and stdout");
 		this.connection = createProtocolConnection(child.stdout, child.stdin);
+		// Without a handler, this connection replies to server requests with JSON-RPC MethodNotFound (-32601).
+		this.connection.onRequest("window/showMessageRequest", () => null);
+		this.connection.onRequest("workspace/applyEdit", () => ({
+			applied: false,
+			failureReason: "pi-lsp-onread does not apply server-initiated edits",
+		}));
+		this.connection.onRequest("client/registerCapability", () => null);
+		this.connection.onRequest("client/unregisterCapability", () => null);
+		this.connection.onRequest("workspace/configuration", (params: { items: unknown[] }) =>
+			// v1 returns configured settings uniformly; it does not resolve per-section settings.
+			params.items.map(() => this.options.settings ?? null),
+		);
 		this.connection.onError(([error]) => {
 			this.failure = error;
 			void this.dispose();

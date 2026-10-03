@@ -49,7 +49,14 @@ consecutive failures, and safe handling of server-initiated requests.
       failure lines flow through activation; injectable constants
 - Route: delegated.
 
-### T3 — Safe server-initiated request handlers (test-first) [pending]
+### T3 — Safe server-initiated request handlers (test-first) [done]
+- [x] Default verified: unhandled server requests auto-respond MethodNotFound
+      (-32601) — recorded in code comment and probe test
+- [x] GREEN: explicit handlers — showMessageRequest → null (decline, never
+      auto-authorize), applyEdit → {applied:false, failureReason},
+      register/unregisterCapability → ack, workspace/configuration → settings
+      array (no per-section resolution in v1, documented); README note
+- [x] Checks: typecheck, lint, test (130 passing), build
 - [ ] Verify default; explicit decline/ack/configuration handlers; README note
 - Route: delegated.
 

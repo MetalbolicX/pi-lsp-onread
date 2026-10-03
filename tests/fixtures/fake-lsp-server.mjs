@@ -25,10 +25,45 @@ function publish(uri, version, text) {
 	send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params });
 }
 
+const pendingServerRequests = new Map();
+let nextServerRequestId = 1;
+const serverRequestOutcomes = {};
+
+function sendServerRequest(method, params) {
+	const id = nextServerRequestId++;
+	pendingServerRequests.set(id, method);
+	send({ jsonrpc: "2.0", id, method, params });
+}
+
+function startServerRequests() {
+	sendServerRequest("custom/unhandledProbe", {});
+}
+
 function handle(message) {
-	if (message.method === "initialize") {
+	if (message.id !== undefined && pendingServerRequests.has(message.id)) {
+		const method = pendingServerRequests.get(message.id);
+		pendingServerRequests.delete(message.id);
+		serverRequestOutcomes[method] = message.error
+			? { error: { code: message.error.code, message: message.error.message } }
+			: { result: message.result };
+		if (method === "custom/unhandledProbe") {
+			sendServerRequest("window/showMessageRequest", { type: 3, message: "Choose?", actions: [{ title: "Build" }, { title: "Run" }] });
+		} else if (method === "window/showMessageRequest") {
+			sendServerRequest("workspace/applyEdit", { edit: { changes: {} } });
+		} else if (method === "workspace/applyEdit") {
+			sendServerRequest("client/registerCapability", { registrations: [] });
+		} else if (method === "client/registerCapability") {
+			sendServerRequest("client/unregisterCapability", { unregisterations: [] });
+		} else if (method === "client/unregisterCapability") {
+			sendServerRequest("workspace/configuration", { items: [{ section: "one" }, { section: "two" }] });
+		} else if (method === "workspace/configuration") {
+			publish("file:///fake/server-requests", undefined, `error: ${JSON.stringify(serverRequestOutcomes)}`);
+		}
+	} else if (message.method === "initialize") {
 		if (process.env.FAKE_HANG_INITIALIZE === "1") return;
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities: { textDocumentSync: 1 } } });
+	} else if (message.method === "initialized") {
+		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
 	} else if (message.method === "shutdown") {
 		send({ jsonrpc: "2.0", id: message.id, result: null });
 	} else if (message.method === "textDocument/didOpen") {

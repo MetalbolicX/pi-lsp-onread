@@ -42,6 +42,33 @@ afterEach(async () => {
 });
 
 describe("LSP client", () => {
+	it("probes the protocol default for an unhandled server request", async () => {
+		const client = await createClient({ FAKE_SERVER_REQUESTS: "1" });
+		const received = nextDiagnostics(client);
+		expect((await client.ensure()).ok).toBe(true);
+		const event = await received;
+		const message = event.diagnostics[0]?.message;
+		const outcomes = JSON.parse(typeof message === "string" ? message.replace(/^error: /, "") : "{}");
+		expect(outcomes["custom/unhandledProbe"]).toMatchObject({ error: { code: -32601 } });
+	}, timeout);
+
+	it("handles server requests with safe defaults and configured settings", async () => {
+		const settings = { example: "configured" };
+		const client = await createClient({ FAKE_SERVER_REQUESTS: "1" }, { settings });
+		const received = nextDiagnostics(client);
+		expect((await client.ensure()).ok).toBe(true);
+		// The fixture echoes the request response outcomes in one diagnostics event for deterministic observation.
+		const event = await received;
+		const message = event.diagnostics[0]?.message;
+		const outcomes = JSON.parse(typeof message === "string" ? message.replace(/^error: /, "") : "{}");
+		expect(outcomes["custom/unhandledProbe"]).toMatchObject({ error: { code: -32601 } });
+		expect(outcomes["window/showMessageRequest"]).toEqual({ result: null });
+		expect(outcomes["workspace/applyEdit"].result).toMatchObject({ applied: false, failureReason: expect.any(String) });
+		expect(outcomes["client/registerCapability"]).toEqual({ result: null });
+		expect(outcomes["client/unregisterCapability"]).toEqual({ result: null });
+		expect(outcomes["workspace/configuration"]).toEqual({ result: [settings, settings] });
+	}, timeout);
+
 	it("completes initialize and initialized handshake", async () => {
 		const client = await createClient();
 		const [resultA, resultB] = await Promise.all([client.ensure(), client.ensure()]);
