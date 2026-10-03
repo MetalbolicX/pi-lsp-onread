@@ -122,6 +122,16 @@ on session end. README extension section. Route: delegated.
 - Cached feature-branch-chain. RDD on: assess per commit (boundary 615c783),
   native review at slice close.
 
+## Follow-ups
+
+Advisory, non-blocking, from the approved four-lens review:
+
+- R2-001 (readability): src/runtime/session.ts:27-28 — WARNING.
+- R2-002 (readability): src/lsp/documents.ts:8-12 — SUGGESTION.
+- R3-001 (reliability): src/runtime/activation.ts:100-113 — WARNING.
+- R4-001 (resilience): src/lsp/client.ts:94-104 — WARNING.
+- R4-002 (resilience): src/runtime/session.ts:76-99 — WARNING.
+
 ## Progress log
 
 - 2026-10-02: user confirmed edit behavior (wait ≤5s); feature opened before
@@ -129,3 +139,11 @@ on session end. README extension section. Route: delegated.
 - 2026-10-02: T1 d2db270 (511 lines) — HIGH assess + independent verifier
   (mitigated). T2 2223364 (362). T3 0664051 (494). T4 f9d639c (204).
   119 tests / 25 files green. Slice review at close below.
+- 2026-10-02: Slice review (615c783..b12bb71): first START hit an expired
+  consent binding (local lifecycle outcome, no lineage); fresh inspect +
+  START created lineage review-b8f0acdbe0161928, HIGH tier, four lenses,
+  24 files / 1602 lines, correction budget 200. Two parent transcription
+  rejections without mutation; fresh STATUS + verbatim resubmit succeeded.
+  Outcome APPROVED 4/4; 5 advisories recorded above. Acknowledgement
+  executed: authority burned. Feature COMPLETE. Delivery: ordinary
+  repository policy; push/PR/merge are user decisions.
