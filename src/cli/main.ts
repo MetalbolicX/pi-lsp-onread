@@ -5,6 +5,7 @@ import { init } from "./commands/init.js";
 import { install } from "./commands/install.js";
 import type { PiRunner } from "./pi-runner.js";
 import { list } from "./commands/list.js";
+import { trust } from "./commands/trust.js";
 
 function readVersion(): string {
 	try {
@@ -28,6 +29,14 @@ function usage(): string {
 		"  pi-lsp-onread list                List available language presets",
 		"  pi-lsp-onread check [--project <path>]  Validate config and statically check server executables",
 		"  pi-lsp-onread install [--local] [--dry-run]  Register this Pi extension natively",
+		"",
+		"Trust:",
+		"  pi-lsp-onread trust [list]        List trusted roots",
+		"  pi-lsp-onread trust add [path]    Trust a canonical project root (default: cwd)",
+		"  pi-lsp-onread trust remove [path] Remove an exact trusted root (default: cwd)",
+		"  Trust is an explicit allowlist; roots match exactly and commands never prompt.",
+		"  Store: ~/.pi/agent/lsp.trust.json",
+		"  Trust commands exit 0 on success and 1 on errors.",
 		"  pi-lsp-onread --version           Print version",
 		"",
 		"Options:",
@@ -45,6 +54,7 @@ function usage(): string {
 export interface MainOptions {
 	pathEnv?: string;
 	piRunner?: PiRunner;
+	trustStorePath?: string;
 }
 
 export async function main(argv: readonly string[], options: MainOptions = {}): Promise<number> {
@@ -69,6 +79,8 @@ export async function main(argv: readonly string[], options: MainOptions = {}): 
 			return check(argv.slice(1));
 		case "install":
 			return install(argv.slice(1), { pathEnv: options.pathEnv, runner: options.piRunner });
+		case "trust":
+			return trust(argv.slice(1), { storePath: options.trustStorePath });
 		default:
 			console.error(`Unknown command: ${command}\n`);
 			console.error(usage());

@@ -57,16 +57,21 @@ may only start for trusted roots. Trust is runtime-owned — a project's
       caller-canonicalized contract documented)
 - [x] Checks: typecheck, lint, test (80 passing), build
 
-### Task 2 — CLI trust commands (test-first) [pending]
-- [ ] RED: tests/unit/cli/trust.test.ts
-- [ ] GREEN: src/cli/commands/trust.ts (list/add/remove, injectable store
-      path), main.ts dispatch + help, README trust section
-- [ ] Checks: typecheck, lint, test, build
-- Route: delegated.
+### Task 2 — CLI trust commands (test-first) [done]
+- [x] RED: tests/unit/cli/trust.test.ts failed — `trust` was an unknown command
+- [x] GREEN: src/cli/commands/trust.ts (list/add idempotent/remove strict,
+      noninteractive, malformed-store refusal); main.ts namespaced dispatch +
+      injectable store-path seam; help Trust section; README trust docs
+- [x] Checks: typecheck, lint, test (92 passing), build
 
 ## Verification evidence
 
 (Baseline at e16512b: 69 tests / 14 files green; recorded per task below.)
+
+- T1 (worker + parent spot check): RED observed; typecheck/lint/build exit 0;
+  `pnpm test` 80 passing; parent re-ran test → 80.
+- T2 (worker + parent spot check): RED observed (trust unknown command);
+  typecheck/lint/build exit 0; `pnpm test` 92 passing; parent re-ran → 92.
 
 ## Delivery
 

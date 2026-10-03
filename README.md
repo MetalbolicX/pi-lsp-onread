@@ -22,6 +22,11 @@ The CLI generates LSP configuration only. It does not download, install, or laun
 | `list` | `pi-lsp-onread list` | Lists available language presets and typical commands; guided presets may need toolchain-specific onboarding. |
 | `check` | `pi-lsp-onread check [--project <path>]` | Validates the effective configuration and statically searches PATH (and project-relative paths) for enabled server executables. It never runs a server or checks versions. Exit 1 reports configuration errors, missing configuration, or missing executables. |
 | `install` | `pi-lsp-onread install [--local] [--dry-run]` | Registers this package through native `pi install npm:pi-lsp-onread`; defaults to personal scope and uses `--local` for project scope. Requires the `pi` CLI on PATH. `--dry-run` prints the command without spawning it. This is self-registration only; it does not install language servers. |
+| `trust` | `pi-lsp-onread trust [list]` | Lists trusted roots in store order; a missing or empty store prints `No trusted roots.`. |
+| `trust add` | `pi-lsp-onread trust add [path]` | Adds the canonical path (default: current directory) to the explicit user-owned allowlist. Re-adding an exact root is a no-write success. |
+| `trust remove` | `pi-lsp-onread trust remove [path]` | Removes an exact canonical root (default: current directory); absent roots are an error. |
+
+Trust is a fully noninteractive explicit allowlist: only exact canonical roots are trusted, so trusting a parent does **not** trust nested projects. The store is `~/.pi/agent/lsp.trust.json`; it is user-owned and is never granted by project configuration. Malformed store data names the file and blocks changes rather than resetting it. Trust commands exit **0** on success and **1** on errors.
 
 Exit code **0** means success (including a successful dry-run); **1** means an error, conflict, or check finding. The former exit-2 unimplemented-command stubs are gone.
 
