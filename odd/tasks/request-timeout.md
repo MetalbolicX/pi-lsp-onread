@@ -70,3 +70,8 @@ consecutive failures, and safe handling of server-initiated requests.
 
 - 2026-10-02: plan approved (cooldown + circuit-break chosen); feature opened
   before first write.
+- 2026-10-02: T1 697386e (160 lines; assess medium) — parent resolved the
+  worker's legitimate disposal-vs-retry conflict: retries live at session
+  layer with fresh clients. T2 0d5b856 (176; assess medium). T3 7950d0e
+  (87; assess medium; default MethodNotFound verified). 130 tests / 26
+  files green; every task test-first. Slice review at close below.
