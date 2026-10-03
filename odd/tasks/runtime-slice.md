@@ -43,7 +43,12 @@ results, never crashes. tests/fixtures/fake-lsp-server.mjs controllable fake
 (JSON-RPC over stdio: publishes diagnostics for opened docs, configurable
 delay/version) + tests/unit/lsp/. Route: delegated.
 
-### T2 — Diagnostics store + policy + format (test-first) [pending]
+### T2 — Diagnostics store + policy + format (test-first) [done]
+- [x] RED observed; GREEN: src/diagnostics/{types,store,policy,format}.ts —
+      latest-wins snapshots, freshness current/stale/unknown (+pending via
+      absence), global severity filter + maxItems/maxChars caps with dropped
+      counts, deterministic read/edit formatting, never claims clean compile
+- [x] Checks: typecheck, lint, test (104 passing), build
 src/diagnostics/{types,store,policy,format}.ts: snapshots keyed
 (serverId, uri) with doc version at publication; freshness = current
 (version-known match) | stale | unknown; pending state; policy severity
