@@ -39,6 +39,7 @@
 		"prepublishOnly": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
 	},
 	"dependencies": {
+		"ajv": "^8.20.0",
 		"vscode-languageserver-protocol": "^3.17.5"
 	},
 	"devDependencies": {

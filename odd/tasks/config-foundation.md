@@ -56,18 +56,14 @@ vertical slice and CLI generation wiring are later features.
 - Route: delegated (gentle-ai-worker; multi-file write trigger). No new RED:
   behavior-preserving refactor; existing tests are the regression net.
 
-### Task 2 — Config module (test-first) [pending]
-- [ ] RED: `tests/unit/config/{load,merge,validate}.test.ts` fail for missing module
-- [ ] GREEN: `src/config/{types,schema,load,merge,validate,index}.ts`
-- [ ] ajv (2020-12 dialect) validates source files against bundled schema JSON
-- [ ] Merge: defaults < global < project; recursive objects, replace
-      arrays/scalars; `lsp:false` disables all; `disabled:true` tombstone needs
-      no command; diagnostics defaults onRead=cached, onChange=wait, waitMs=
-      5000, severities=[error], maxItems=10, maxChars=4000
-- [ ] Semantic validation on merged config: enabled servers need nonempty
-      command; extensions nonempty; languageId map consistent
-- [ ] Actionable errors (file + reason), malformed JSON never crashes
-- [ ] Checks: typecheck, lint, test (all pass), build
+### Task 2 — Config module (test-first) [done]
+- [x] RED: `tests/unit/config/{load,merge,validate}.test.ts` failed against missing module
+- [x] GREEN: `src/config/{types,schema,load,merge,validate,index}.ts`
+- [x] ajv 2020-12 (`ajv/dist/2020.js`) validates source files against bundled schema JSON (import attribute)
+- [x] Merge semantics: defaults < global < project; recursive objects, replace arrays/scalars; `lsp:false`; `disabled:true` tombstone; diagnostics defaults applied
+- [x] Semantic validation on merged config incl. exact-cover languageId maps
+- [x] Actionable errors; discriminated results; malformed JSON never crashes
+- [x] Checks: typecheck, lint, test (20 passing), build
 - Route: delegated (gentle-ai-worker; multi-file write trigger).
 
 ### Task 3 — Workspace module (test-first) [pending]
@@ -88,6 +84,10 @@ per odd/tasks/scaffold.md and re-verified at Task 1 start.)
 - Task 1 (worker + parent spot check): `pnpm typecheck` exit 0; `pnpm lint`
   exit 0; `pnpm test` exit 0, 11 tests; `pnpm build` exit 0, dist/extension.js
   + dist/cli.js present; parent re-ran `pnpm test` → 11 passing.
+- Task 2 (worker + parent spot check): RED observed (config tests failed on
+  missing module); `pnpm typecheck` exit 0; `pnpm lint` exit 0; `pnpm test`
+  exit 0, 20 tests (11 existing + 9 config… 20 total across 5 files);
+  `pnpm build` exit 0; parent re-ran `pnpm test` → 20 passing.
 
 ## Delivery
 
@@ -101,3 +101,11 @@ per odd/tasks/scaffold.md and re-verified at Task 1 start.)
 ## Progress log
 
 - 2026-10-02: feature opened before first write; tasks 1–3 defined.
+- 2026-10-02: Task 1 done. Work-unit commit 96ee643 (232 authored lines).
+  RDD assess: medium (executable_change src/cli.ts), writer profile large →
+  writer self-verification stands, no separate verifier; reviewDue at slice
+  close (slice_budget_reached). Boundary: 208cdfe → 96ee643.
+- 2026-10-02: Slice crossed ~400 authored lines (232 committed + 445 staged).
+  ask-on-risk menu fired once; user selected feature-branch-chain
+  (chain_strategy=feature-branch-chain). Cached. PR chain creation remains a
+  separate user decision.
