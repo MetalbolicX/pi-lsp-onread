@@ -23,7 +23,7 @@ Toolchain (user-selected): pnpm, TypeScript, rolldown bundler, vitest, oxlint â€
 ## Verification evidence
 
 - `pnpm typecheck` (tsc --noEmit, strict): clean
-- `pnpm lint` (oxlint): clean
+- `pnpm lint` (oxlint): clean â€” with pi-rules-md's `.oxlintrc.json` adopted (generic rules; sibling-specific `src/render.golden/` ignore dropped); three findings fixed (array/object destructuring, `import.meta.filename` over `fileURLToPath`)
 - `pnpm test` (vitest): 2 files, 11/11 passed
 - `pnpm build` (rolldown): dist/extension.js + dist/cli.js produced
 - CLI smoke: `node dist/cli.js list` renders the catalog; `--version` prints 0.0.1

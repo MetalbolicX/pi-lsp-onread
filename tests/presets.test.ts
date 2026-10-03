@@ -35,7 +35,7 @@ describe("preset catalog", () => {
 			for (const ext of preset.extensions) {
 				expect(ext, preset.id).toMatch(NAME_PATTERN);
 			}
-			const languageId = preset.languageId;
+			const { languageId } = preset;
 			const covered = preset.extensions.every(
 				(ext) => typeof languageId === "string" || ext in languageId,
 			);

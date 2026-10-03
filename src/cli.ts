@@ -12,7 +12,6 @@
  */
 
 import { readFileSync, realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { PRESETS } from "./presets.js";
 
 function readVersion(): string {
@@ -63,7 +62,7 @@ function listPresets(): void {
 }
 
 export function main(argv: readonly string[]): number {
-	const command = argv[0] ?? "help";
+	const [command = "help"] = argv;
 	switch (command) {
 		case "help":
 		case "--help":
@@ -90,11 +89,11 @@ export function main(argv: readonly string[]): number {
 	}
 }
 
-const entryArg = process.argv[1];
+const [, entryArg] = process.argv;
 if (entryArg) {
 	try {
 		const entry = realpathSync(entryArg);
-		const self = realpathSync(fileURLToPath(import.meta.url));
+		const self = realpathSync(import.meta.filename);
 		if (entry === self) {
 			process.exitCode = main(process.argv.slice(2));
 		}
