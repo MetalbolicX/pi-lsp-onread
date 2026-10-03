@@ -78,7 +78,22 @@ may only start for trusted roots. Trust is runtime-owned — a project's
 - Cached strategy: feature-branch-chain. Commits on feat/trust-gate.
 - RDD: on. Assess per commit (first boundary e16512b); slice review at close.
 
+## Follow-ups
+
+Advisory, non-blocking, from the approved review (never reopens it):
+
+- R3-001 (reliability): src/runtime/authorization.ts:3 — WARNING.
+- R3-002 (reliability): src/runtime/trust-store.ts:55-56 — WARNING.
+
 ## Progress log
 
 - 2026-10-02: user chose explicit allowlist; feature opened before first
   write; branch feat/trust-gate created from e16512b; tasks 1–2 defined.
+- 2026-10-02: T1 0fb01c0 (306 lines; 11 tests) — assess medium.
+- 2026-10-02: T2 288f1bb (199 lines; 12 tests; 92 total) — assess medium.
+- 2026-10-02: Slice review (e16512b..288f1bb): lineage review-a2b4958985e88560,
+  medium tier, lens review-reliability, 9 files / 499 lines. One parent
+  transcription error rejected without mutation; fresh STATUS + verbatim
+  resubmit succeeded. Outcome APPROVED; 2 advisory findings recorded above.
+  Acknowledgement executed: authority burned. Feature COMPLETE. Delivery:
+  ordinary repository policy; push/PR/merge are user decisions.
