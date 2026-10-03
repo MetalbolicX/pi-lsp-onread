@@ -9,7 +9,7 @@ if (entryArg) {
 		const entry = realpathSync(entryArg);
 		const self = realpathSync(import.meta.filename);
 		if (entry === self) {
-			process.exitCode = main(process.argv.slice(2));
+			process.exitCode = await main(process.argv.slice(2));
 		}
 	} catch {
 		// Entry resolution failed (e.g. unusual symlink setup); fall through so

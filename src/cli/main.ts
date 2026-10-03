@@ -20,7 +20,8 @@ function usage(): string {
 		"pi-lsp-onread — project LSP configuration for the Pi coding agent",
 		"",
 		"Usage:",
-		"  pi-lsp-onread init [options]      Create or extend .pi/lsp.json (planned)",
+		"  pi-lsp-onread init [--project <path>] [--languages a,b] [--dry-run] [--yes]",
+		"                                  Create or extend .pi/lsp.json",
 		"  pi-lsp-onread add <preset...>     Add language presets to config (planned)",
 		"  pi-lsp-onread list                List available language presets",
 		"  pi-lsp-onread check               Validate config and PATH availability (planned)",
@@ -38,7 +39,7 @@ function usage(): string {
 	].join("\n");
 }
 
-export function main(argv: readonly string[]): number {
+export async function main(argv: readonly string[]): Promise<number> {
 	const [command = "help"] = argv;
 	switch (command) {
 		case "help":
@@ -53,7 +54,7 @@ export function main(argv: readonly string[]): number {
 		case "list":
 			return list();
 		case "init":
-			return init();
+			return init(argv.slice(1));
 		case "add":
 			return add();
 		case "check":

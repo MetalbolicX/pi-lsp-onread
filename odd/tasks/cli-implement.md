@@ -61,13 +61,15 @@ servers, and never mutates Pi package settings.
       existing merge + semantic validators directly
 - [x] Checks: typecheck, lint, test (35 passing), build
 
-### Task 2 — init command [pending]
-- [ ] RED: tests/unit/cli/init.test.ts
-- [ ] GREEN: src/cli/commands/init.ts + main dispatch/help; flags
-      --project/--languages/--dry-run/--yes; manifest-based selection hints
-      (src/cli/manifests.ts); interactive numbered multi-select via readline
-      (injectable stdin) with TTY guard: non-TTY without --languages errors
-- Route: delegated.
+### Task 2 — init command [done]
+- [x] RED: tests/unit/cli/init.test.ts failed against exit-2 stub
+- [x] GREEN: src/cli/commands/init.ts + src/cli/manifests.ts + async main
+      (Promise<number>, src/cli.ts awaits under self-exec guard; parent-approved
+      seam change; existing cli tests updated to await)
+- [x] Flags --project/--languages/--dry-run/--yes; hints never auto-select;
+      interactive numbered multi-select via injectable readline; non-TTY guard;
+      conflicts always block; dry-run no-write; malformed config stops
+- [x] Checks: typecheck, lint, test (45 passing), build
 
 ### Task 3 — add command [pending]
 - [ ] RED: tests/unit/cli/add.test.ts
