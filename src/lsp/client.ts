@@ -10,6 +10,24 @@ export interface ClientOptions {
 	rootUri: string;
 	initializationOptions?: unknown;
 	settings?: unknown;
+	initializeTimeoutMs?: number;
+	requestTimeoutMs?: number;
+}
+
+class TimeoutError extends Error {}
+
+export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(() => reject(new TimeoutError(`${label} timed out after ${ms}ms`)), ms);
+			}),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
 }
 
 export interface PublishedDiagnostics extends PublishDiagnosticsParams {
@@ -19,7 +37,7 @@ export interface PublishedDiagnostics extends PublishDiagnosticsParams {
 
 export type ClientResult<T = void> =
 	| { ok: true; value?: T }
-	| { ok: false; error: { kind: "connection" | "request" | "disposed"; message: string } };
+	| { ok: false; error: { kind: "connection" | "request" | "disposed" | "timeout"; message: string } };
 
 export class LspClient {
 	state: ClientState = "starting";
@@ -62,17 +80,24 @@ export class LspClient {
 		return this.initialization;
 	}
 
-	async request<T>(method: string, params?: unknown): Promise<ClientResult<T>> {
+	async request<T>(method: string, params?: unknown, timeoutMs = this.options.requestTimeoutMs ?? 10_000): Promise<ClientResult<T>> {
 		if (this.state === "disposed") return { ok: false, error: { kind: "disposed", message: "LSP client is disposed" } };
 		try {
-			const value = params === undefined
-				? await this.connection.sendRequest<T>(method)
-				: await this.connection.sendRequest<T>(method, params);
+			const pending = params === undefined
+				? this.connection.sendRequest<T>(method)
+				: this.connection.sendRequest<T>(method, params);
+			const value = await withTimeout(pending, timeoutMs, method);
 			return this.failure
 				? { ok: false, error: { kind: "connection", message: this.failure.message } }
 				: { ok: true, value };
 		} catch (error) {
-			return { ok: false, error: { kind: "request", message: error instanceof Error ? error.message : String(error) } };
+			return {
+				ok: false,
+				error: {
+					kind: error instanceof TimeoutError ? "timeout" : "request",
+					message: error instanceof Error ? error.message : String(error),
+				},
+			};
 		}
 	}
 
@@ -93,6 +118,12 @@ export class LspClient {
 		return this.state === "disposed";
 	}
 
+	private async failedInitialization(result: ClientResult): Promise<ClientResult> {
+		await this.dispose();
+		this.initialization = undefined;
+		return result;
+	}
+
 	private async initialize(): Promise<ClientResult> {
 		const result = await this.request<{ capabilities?: Record<string, unknown> }>("initialize", {
 			processId: process.pid,
@@ -101,30 +132,18 @@ export class LspClient {
 				textDocument: { synchronization: { dynamicRegistration: false, willSave: false, didSave: false } },
 			},
 			initializationOptions: this.options.initializationOptions ?? null,
-		});
-		if (!result.ok) {
-			await this.dispose();
-			return result;
-		}
-		if (this.isDisposed()) return { ok: false, error: { kind: "disposed", message: "LSP client is disposed" } };
+		}, this.options.initializeTimeoutMs ?? 15_000);
+		if (!result.ok) return this.failedInitialization(result);
+		if (this.isDisposed()) return this.failedInitialization({ ok: false, error: { kind: "disposed", message: "LSP client is disposed" } });
 		const initialized = await this.notify("initialized", {});
-		if (!initialized.ok) {
-			await this.dispose();
-			return initialized;
-		}
-		if (this.isDisposed()) return { ok: false, error: { kind: "disposed", message: "LSP client is disposed" } };
+		if (!initialized.ok) return this.failedInitialization(initialized);
+		if (this.isDisposed()) return this.failedInitialization({ ok: false, error: { kind: "disposed", message: "LSP client is disposed" } });
 		if (this.options.settings !== undefined) {
 			const settings = await this.notify("workspace/didChangeConfiguration", { settings: this.options.settings });
-			if (!settings.ok) {
-				await this.dispose();
-				return settings;
-			}
+			if (!settings.ok) return this.failedInitialization(settings);
 		}
-		if (this.isDisposed()) return { ok: false, error: { kind: "disposed", message: "LSP client is disposed" } };
-		if (this.failure) {
-			await this.dispose();
-			return { ok: false, error: { kind: "connection", message: this.failure.message } };
-		}
+		if (this.isDisposed()) return this.failedInitialization({ ok: false, error: { kind: "disposed", message: "LSP client is disposed" } });
+		if (this.failure) return this.failedInitialization({ ok: false, error: { kind: "connection", message: this.failure.message } });
 		this.state = "ready";
 		return { ok: true };
 	}

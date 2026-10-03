@@ -27,6 +27,7 @@ function publish(uri, version, text) {
 
 function handle(message) {
 	if (message.method === "initialize") {
+		if (process.env.FAKE_HANG_INITIALIZE === "1") return;
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities: { textDocumentSync: 1 } } });
 	} else if (message.method === "shutdown") {
 		send({ jsonrpc: "2.0", id: message.id, result: null });
@@ -43,6 +44,9 @@ function handle(message) {
 		documents.delete(message.params.textDocument.uri);
 	} else if (message.method === "exit") {
 		process.exit(0);
+	} else if (message.id !== undefined) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		send({ jsonrpc: "2.0", id: message.id, result: true });
 	}
 }
 

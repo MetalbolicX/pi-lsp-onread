@@ -20,7 +20,7 @@ function nextDiagnostics(client: LspClient): Promise<Parameters<Parameters<typeo
 	});
 }
 
-async function createClient(env: NodeJS.ProcessEnv = {}): Promise<LspClient> {
+async function createClient(env: NodeJS.ProcessEnv = {}, options: Partial<ConstructorParameters<typeof LspClient>[1]> = {}): Promise<LspClient> {
 	const spawned = await spawnServer({ command: [process.execPath, fixture], cwd, env });
 	expect(spawned.ok).toBe(true);
 	if (!spawned.ok) throw new Error(spawned.error.message);
@@ -30,6 +30,7 @@ async function createClient(env: NodeJS.ProcessEnv = {}): Promise<LspClient> {
 		rootUri: "file:///workspace/project",
 		initializationOptions: { enabled: true },
 		settings: { example: true },
+		...options,
 	});
 	clients.push(client);
 	return client;
@@ -71,6 +72,30 @@ describe("LSP client", () => {
 		const event = await changed;
 		expect(event.version).toBe(2);
 		expect(event.diagnostics).toHaveLength(1);
+	}, timeout);
+
+	it("times out initialize, disposes the child, and clears the cached failure", async () => {
+		const client = await createClient({ FAKE_HANG_INITIALIZE: "1" }, { initializeTimeoutMs: 100 });
+		const [child] = children;
+		if (!child) throw new Error("Expected child process");
+		const exited = once(child, "exit");
+
+		const [result, concurrentResult] = await Promise.all([client.ensure(), client.ensure()]);
+		expect(result).toMatchObject({ ok: false, error: { kind: "timeout", message: expect.stringContaining("initialize") } });
+		expect(concurrentResult).toEqual(result);
+		if (!result.ok) expect(result.error.message).toContain("100ms");
+		await exited;
+		expect(await client.ensure()).toMatchObject({ ok: false, error: { kind: "disposed" } });
+		await client.dispose();
+	}, timeout);
+
+	it("keeps the connection usable after a request times out", async () => {
+		const client = await createClient({ FAKE_HANG_METHOD: "custom/hang" }, { requestTimeoutMs: 100 });
+		expect((await client.ensure()).ok).toBe(true);
+		const timedOut = await client.request("custom/hang");
+		expect(timedOut).toMatchObject({ ok: false, error: { kind: "timeout", message: expect.stringContaining("custom/hang") } });
+		if (!timedOut.ok) expect(timedOut.error.message).toContain("100ms");
+		expect(await client.request<boolean>("custom/normal")).toEqual({ ok: true, value: true });
 	}, timeout);
 
 	it("reports ENOENT as a typed failure", async () => {
