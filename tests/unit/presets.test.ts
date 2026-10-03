@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PRESETS } from "../src/presets.js";
+import { PRESETS } from "../../src/presets/catalog.js";
 
 const NAME_PATTERN = /^(\.[A-Za-z0-9][A-Za-z0-9_.-]*|[A-Za-z][A-Za-z0-9_.-]*)$/;
 
@@ -46,7 +46,7 @@ describe("preset catalog", () => {
 
 describe("bundled JSON schema", () => {
 	const schema = JSON.parse(
-		readFileSync(new URL("../schema/lsp.schema.json", import.meta.url), "utf8"),
+		readFileSync(new URL("../../schema/lsp.schema.json", import.meta.url), "utf8"),
 	) as {
 		$schema: string;
 		additionalProperties: boolean;
