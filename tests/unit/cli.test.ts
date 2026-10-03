@@ -27,7 +27,4 @@ describe("cli", () => {
 		expect(await main(["check", "--project", process.cwd()])).toBe(1);
 	});
 
-	it("keeps install as an unimplemented command", async () => {
-		expect(await main(["install"])).toBe(2);
-	});
 });

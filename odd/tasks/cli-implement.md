@@ -90,13 +90,16 @@ servers, and never mutates Pi package settings.
 - [x] Parent-authorized minimal cli.test.ts update (check out of stub loop)
 - [x] Checks: typecheck, lint, test (64 passing), build
 
-### Task 5 — install command + docs [pending]
-- [ ] RED: tests/unit/cli/install.test.ts
-- [ ] GREEN: src/cli/commands/install.ts + src/cli/pi-runner.ts (injectable);
-      pi availability detection, `pi install npm:pi-lsp-onread` (+--local),
-      --dry-run prints, failures relay pi output, exit 1 clear errors
-- [ ] README CLI section updated to final behavior (all commands)
-- Route: delegated.
+### Task 5 — install command + docs [done]
+- [x] RED: tests/unit/cli/install.test.ts failed against exit-2 stub (6 tests)
+- [x] GREEN: src/cli/commands/install.ts + src/cli/pi-runner.ts (injectable
+      spawn); static PATH-only pi detection (reuses executables lookup, no
+      `pi --version` spawn); `pi install npm:pi-lsp-onread` (+--local);
+      --dry-run prints only; failures relay output exit 1; never edits Pi
+      settings; no LSP installs; no purge
+- [x] README CLI section = final behavior for all commands + exit-code contract
+- [x] Stub loop removed from cli.test.ts (no exit-2 remains anywhere)
+- [x] Checks: typecheck, lint, test (69 passing ×2 runs), build
 
 ## Verification evidence
 

@@ -3,6 +3,7 @@ import { add } from "./commands/add.js";
 import { check } from "./commands/check.js";
 import { init } from "./commands/init.js";
 import { install } from "./commands/install.js";
+import type { PiRunner } from "./pi-runner.js";
 import { list } from "./commands/list.js";
 
 function readVersion(): string {
@@ -26,7 +27,7 @@ function usage(): string {
 		"                                  Add language presets to config non-interactively",
 		"  pi-lsp-onread list                List available language presets",
 		"  pi-lsp-onread check [--project <path>]  Validate config and statically check server executables",
-		"  pi-lsp-onread install [--local]   Register the Pi extension via pi install (planned)",
+		"  pi-lsp-onread install [--local] [--dry-run]  Register this Pi extension natively",
 		"  pi-lsp-onread --version           Print version",
 		"",
 		"Options:",
@@ -34,13 +35,19 @@ function usage(): string {
 		"  --dry-run          Preview changes without writing",
 		"  --yes              Approve non-conflicting generation non-interactively",
 		"  --local            Register in project scope instead of personal scope",
+		"  install requires the 'pi' CLI on PATH; --dry-run only prints the command.",
 		"",
 		"The CLI generates configuration only. It never downloads or installs",
 		"language servers and never launches builds.",
 	].join("\n");
 }
 
-export async function main(argv: readonly string[]): Promise<number> {
+export interface MainOptions {
+	pathEnv?: string;
+	piRunner?: PiRunner;
+}
+
+export async function main(argv: readonly string[], options: MainOptions = {}): Promise<number> {
 	const [command = "help"] = argv;
 	switch (command) {
 		case "help":
@@ -61,7 +68,7 @@ export async function main(argv: readonly string[]): Promise<number> {
 		case "check":
 			return check(argv.slice(1));
 		case "install":
-			return install();
+			return install(argv.slice(1), { pathEnv: options.pathEnv, runner: options.piRunner });
 		default:
 			console.error(`Unknown command: ${command}\n`);
 			console.error(usage());
