@@ -1,0 +1,135 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "pi-lsp-onread configuration",
+	"description": "Extension-owned configuration for pi-lsp-onread. Global file: ~/.pi/agent/lsp.json. Project file: .pi/lsp.json. Layered files may contain partial server overrides; required fields are validated on the merged effective configuration at runtime. $schema itself is an editor hint; the extension still validates at load time.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["version"],
+	"properties": {
+		"$schema": {
+			"type": "string",
+			"description": "Pointer to this schema, e.g. \"./lsp.schema.json\" for a copy next to the config file."
+		},
+		"version": {
+			"const": 1,
+			"description": "Configuration contract version."
+		},
+		"lsp": {
+			"description": "Map of server id to server definition, or false to disable every LSP server. No servers are enabled by default; activation happens on the first matching read/edit/write.",
+			"oneOf": [
+				{ "type": "boolean", "const": false },
+				{ "type": "object", "additionalProperties": { "$ref": "#/$defs/server" } }
+			]
+		},
+		"diagnostics": {
+			"$ref": "#/$defs/diagnostics"
+		}
+	},
+	"$defs": {
+		"server": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"command": {
+					"type": "array",
+					"items": { "type": "string" },
+					"minItems": 1,
+					"description": "Server argv; executed without a shell. Required once the merged configuration enables the server."
+				},
+				"extensions": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"pattern": "^(\\.[A-Za-z0-9][A-Za-z0-9_.-]*|[A-Za-z][A-Za-z0-9_.-]*)$"
+					},
+					"minItems": 1,
+					"description": "File extensions (leading dot) or whole filenames without an extension (e.g. \"Dockerfile\")."
+				},
+				"languageId": {
+					"description": "LSP languageId, or a per-extension map for multi-language servers; the map must cover every configured extension.",
+					"oneOf": [
+						{ "type": "string", "minLength": 1 },
+						{ "type": "object", "additionalProperties": { "type": "string" }, "minProperties": 1 }
+					]
+				},
+				"rootMarkers": {
+					"type": "array",
+					"items": { "type": "string", "minLength": 1 },
+					"description": "File or directory names used to find the nearest project root; falls back to the configured project root."
+				},
+				"disabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Disable this server. Tombstone entries need no other fields."
+				},
+				"env": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Literal environment variable overrides layered over the inherited process environment."
+				},
+				"initialization": {
+					"type": "object",
+					"description": "Server-specific options sent with the LSP initialize request (free-form)."
+				},
+				"settings": {
+					"type": "object",
+					"description": "Server configuration returned for workspace/configuration requests and didChangeConfiguration (free-form)."
+				},
+				"diagnostics": {
+					"$ref": "#/$defs/serverDiagnostics"
+				}
+			}
+		},
+		"diagnostics": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"onRead": {
+					"enum": ["cached", "off"],
+					"description": "Reads never wait; 'cached' appends available diagnostics with freshness labels, 'off' disables injection (activation is unaffected)."
+				},
+				"onChange": {
+					"enum": ["wait", "cached", "off"],
+					"description": "Behavior after successful edit/write tool results."
+				},
+				"waitMs": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Total feedback wait budget after edits/writes, including cold server startup."
+				},
+				"severities": {
+					"type": "array",
+					"items": { "enum": ["error", "warning", "information", "hint"] },
+					"minItems": 1,
+					"uniqueItems": true
+				},
+				"maxItems": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Global output cap across all matching servers for the current file."
+				},
+				"maxChars": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Global character cap for injected diagnostic text."
+				}
+			}
+		},
+		"serverDiagnostics": {
+			"type": "object",
+			"additionalProperties": false,
+			"description": "Per-server policy override. Output caps (maxItems/maxChars) stay global and cannot be overridden per server.",
+			"properties": {
+				"onRead": { "enum": ["cached", "off"] },
+				"onChange": { "enum": ["wait", "cached", "off"] },
+				"waitMs": { "type": "integer", "minimum": 0 },
+				"severities": {
+					"type": "array",
+					"items": { "enum": ["error", "warning", "information", "hint"] },
+					"minItems": 1,
+					"uniqueItems": true
+				}
+			}
+		}
+	}
+}

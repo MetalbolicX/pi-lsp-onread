@@ -1,0 +1,52 @@
+{
+	"name": "pi-lsp-onread",
+	"version": "0.0.1",
+	"description": "Pi extension that activates project-configured LSP servers when the agent reads code and feeds diagnostics back to it. Configuration-first: it generates LSP config, never downloads language servers.",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"lsp",
+		"language-server-protocol",
+		"diagnostics",
+		"rescript"
+	],
+	"license": "MIT",
+	"author": "MetalbolicX",
+	"bin": {
+		"pi-lsp-onread": "dist/cli.js"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"files": [
+		"dist",
+		"schema",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./dist/extension.js"
+		]
+	},
+	"scripts": {
+		"lint": "oxlint",
+		"typecheck": "tsc --noEmit",
+		"build": "rolldown -c",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"prepublishOnly": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+	},
+	"dependencies": {
+		"vscode-languageserver-protocol": "^3.17.5"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "^1.0.0",
+		"@types/node": "^26.6.2",
+		"oxlint": "^1.85.0",
+		"rolldown": "^1.2.4",
+		"typescript": "~7.0.2",
+		"vitest": "^5.0.1"
+	}
+}
