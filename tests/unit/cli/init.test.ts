@@ -9,10 +9,29 @@ async function tempRoot(): Promise<string> {
 	return mkdtemp(join(tmpdir(), "pi-lsp-init-"));
 }
 
-function input(lines: string[], isTTY = false): PassThrough & { isTTY: boolean } {
+function input(isTTY = false): PassThrough & { isTTY: boolean } {
 	const stream = new PassThrough() as PassThrough & { isTTY: boolean };
 	stream.isTTY = isTTY;
-	lines.forEach((line, index) => setTimeout(() => stream.write(line), 10 + index * 100));
+	return stream;
+}
+
+function stagedInput(lines: string[]): PassThrough & { isTTY: boolean; restore: () => void } {
+	const stream = input(true) as PassThrough & { isTTY: boolean; restore: () => void };
+	const prompts = ["Select comma-separated numbers or preset ids:", "Apply this change? [y/N] "];
+	const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+		const text = typeof chunk === "string" ? chunk : chunk.toString();
+		const promptIndex = prompts.findIndex((prompt) => text.includes(prompt));
+		if (promptIndex >= 0) {
+			prompts.splice(promptIndex, 1);
+			const line = lines.shift();
+			if (line !== undefined) queueMicrotask(() => {
+				if (lines.length === 0) stream.end(line);
+				else stream.write(line);
+			});
+		}
+		return true;
+	});
+	stream.restore = () => write.mockRestore();
 	return stream;
 }
 
@@ -74,7 +93,7 @@ describe("init command", () => {
 
 	it("requires --languages on non-TTY input", async () => {
 		const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-		await expect(init(["--project", await tempRoot()], { stdin: input([], false) })).resolves.toBe(1);
+		await expect(init(["--project", await tempRoot()], { stdin: input(false) })).resolves.toBe(1);
 		expect(error).toHaveBeenCalledWith(expect.stringContaining("--languages"));
 	});
 
@@ -92,10 +111,20 @@ describe("init command", () => {
 	it("supports interactive selection by number and preset id", async () => {
 		const root = await tempRoot();
 		const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-		await expect(init(["--project", root], { stdin: input(["1\n", "y\n"], true) })).resolves.toBe(0);
+		const firstInput = stagedInput(["1\n", "y\n"]);
+		try {
+			await expect(init(["--project", root], { stdin: firstInput })).resolves.toBe(0);
+		} finally {
+			firstInput.restore();
+		}
 		expect(log).toHaveBeenCalledWith(expect.stringContaining("typescript"));
 		const second = await tempRoot();
-		await expect(init(["--project", second], { stdin: input(["go\n", "y\n"], true) })).resolves.toBe(0);
+		const secondInput = stagedInput(["go\n", "y\n"]);
+		try {
+			await expect(init(["--project", second], { stdin: secondInput })).resolves.toBe(0);
+		} finally {
+			secondInput.restore();
+		}
 		expect(JSON.parse(await readFile(join(second, ".pi", "lsp.json"), "utf8"))).toHaveProperty("lsp.go");
 	});
 });
