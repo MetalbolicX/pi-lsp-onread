@@ -106,6 +106,17 @@ on session end. README extension section. Route: delegated.
 
 (Baseline 615c783: 92 tests / 17 files green. Record per task.)
 
+- T1 (worker + parent spot check): RED observed; typecheck/lint/build exit 0;
+  `pnpm test` 97 passing. RDD assess HIGH (process_boundary) → mandatory
+  independent verifier run: spawn safety MITIGATED (args array, shell:false,
+  SIGTERM→SIGKILL bounded dispose, no init-failure leak, no orphans; 3 Info
+  notes: no production caller yet, SIGKILL ceiling, unreachable ctor throw).
+- T2 (worker + parent): RED observed; 104 passing; assess medium.
+- T3 (worker + parent): RED observed; 114 passing; assess medium; slice
+  budget reached (cached feature-branch-chain).
+- T4 (worker + parent): RED observed; 119 passing; assess medium. SDK API
+  verified: async tool_result transform + session_shutdown.
+
 ## Delivery
 
 - Cached feature-branch-chain. RDD on: assess per commit (boundary 615c783),
@@ -115,3 +126,6 @@ on session end. README extension section. Route: delegated.
 
 - 2026-10-02: user confirmed edit behavior (wait ≤5s); feature opened before
   first write; branch feat/runtime-slice from 615c783; T1–T4 defined.
+- 2026-10-02: T1 d2db270 (511 lines) — HIGH assess + independent verifier
+  (mitigated). T2 2223364 (362). T3 0664051 (494). T4 f9d639c (204).
+  119 tests / 25 files green. Slice review at close below.
