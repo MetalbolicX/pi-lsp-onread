@@ -37,7 +37,14 @@ consecutive failures, and safe handling of server-initiated requests.
       bound; cached-promise clearing on failure; fixture FAKE_HANG_INITIALIZE
 - Route: delegated.
 
-### T2 — Cooldown + circuit-break (test-first) [pending]
+### T2 — Cooldown + circuit-break (test-first) [done]
+- [x] RED observed; GREEN: session retry policy — injectable
+      {retryCooldownMs 60000, maxConsecutiveStartFailures 3} + clock;
+      per-pool-key failure state; in-cooldown → no spawn + retry-countdown
+      line; disabled-for-session after max; success resets; failed clients
+      removed+disposed from pool; reasons flow through activation verbatim;
+      fixture integration proves no second spawn during cooldown
+- [x] Checks: typecheck, lint, test (128 passing), build
 - [ ] Session failure state per pool key; 60s cooldown; disable after 3;
       failure lines flow through activation; injectable constants
 - Route: delegated.

@@ -21,6 +21,9 @@ export type ClientFactoryResult = { ok: true; client: LspClient } | { ok: false;
 export type ClientFactory = (options: ClientFactoryOptions) => Promise<ClientFactoryResult>;
 export type FsReadFile = (path: string, encoding: "utf8") => Promise<string>;
 
+export const RETRY_COOLDOWN_MS = 60_000;
+export const MAX_CONSECUTIVE_START_FAILURES = 3;
+
 export interface RuntimeSessionOptions {
 	config: EffectiveConfig | ConfigResult;
 	projectRoot: string;
@@ -28,6 +31,14 @@ export interface RuntimeSessionOptions {
 	clientFactory?: ClientFactory;
 	fsReadFile?: FsReadFile;
 	clock?: () => number;
+	retryCooldownMs?: number;
+	maxConsecutiveStartFailures?: number;
+}
+
+interface StartFailureState {
+	consecutiveFailures: number;
+	lastFailedAt: number;
+	disabledForSession: boolean;
 }
 
 interface PendingSnapshot {
@@ -47,6 +58,9 @@ export class RuntimeSession {
 	readonly pendingClients = new Map<string, Promise<ClientFactoryResult>>();
 	private readonly pendingSnapshots = new Set<PendingSnapshot>();
 	private readonly factory: ClientFactory;
+	private readonly failureStates = new Map<string, StartFailureState>();
+	private readonly retryCooldownMs: number;
+	private readonly maxConsecutiveStartFailures: number;
 	readonly fsReadFile: FsReadFile;
 	readonly clock: () => number;
 
@@ -57,6 +71,8 @@ export class RuntimeSession {
 		this.factory = options.clientFactory ?? defaultClientFactory;
 		this.fsReadFile = options.fsReadFile ?? ((path, encoding) => readFile(path, encoding));
 		this.clock = options.clock ?? Date.now;
+		this.retryCooldownMs = options.retryCooldownMs ?? RETRY_COOLDOWN_MS;
+		this.maxConsecutiveStartFailures = options.maxConsecutiveStartFailures ?? MAX_CONSECUTIVE_START_FAILURES;
 	}
 
 	static async create(options: RuntimeSessionOptions): Promise<RuntimeSession> {
@@ -82,6 +98,16 @@ export class RuntimeSession {
 	}
 
 	getOrCreateClient(key: string, options: ClientFactoryOptions): Promise<ClientFactoryResult> {
+		const failure = this.failureStates.get(key);
+		if (failure?.disabledForSession) {
+			return Promise.resolve({ ok: false, message: `server ${options.serverId} disabled for session after ${failure.consecutiveFailures} consecutive start failures` });
+		}
+		if (failure && failure.consecutiveFailures > 0) {
+			const remainingMs = this.retryCooldownMs - (this.clock() - failure.lastFailedAt);
+			if (remainingMs > 0) {
+				return Promise.resolve({ ok: false, message: `server ${options.serverId} retry in ${Math.ceil(remainingMs)}ms` });
+			}
+		}
 		const existing = this.pool.get(key);
 		if (existing) return Promise.resolve({ ok: true, client: existing });
 		const pending = this.pendingClients.get(key);
@@ -92,16 +118,40 @@ export class RuntimeSession {
 				if (result.ok) {
 					this.pool.set(key, result.client);
 					this.attachDiagnostics(result.client);
+				} else {
+					this.recordStartFailure(key);
 				}
 				return result;
 			} catch (error) {
-				return { ok: false, message: error instanceof Error ? error.message : String(error) };
+				const message = error instanceof Error ? error.message : String(error);
+				this.recordStartFailure(key);
+				return { ok: false, message };
 			} finally {
 				this.pendingClients.delete(key);
 			}
 		})();
 		this.pendingClients.set(key, creation);
 		return creation;
+	}
+
+	async recordStartFailure(key: string, client?: LspClient): Promise<void> {
+		const state = this.failureStates.get(key) ?? { consecutiveFailures: 0, lastFailedAt: 0, disabledForSession: false };
+		state.consecutiveFailures += 1;
+		state.lastFailedAt = this.clock();
+		state.disabledForSession = state.consecutiveFailures >= this.maxConsecutiveStartFailures;
+		this.failureStates.set(key, state);
+		if (client && this.pool.get(key) === client) {
+			this.pool.delete(key);
+			await client.dispose().catch(() => {});
+		}
+	}
+
+	recordStartSuccess(key: string): void {
+		const state = this.failureStates.get(key);
+		if (state) {
+			state.consecutiveFailures = 0;
+			state.disabledForSession = false;
+		}
 	}
 
 	watchPublication(serverId: string, uri: string, version: number): { promise: Promise<void>; cancel: () => void } {

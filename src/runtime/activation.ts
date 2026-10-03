@@ -59,10 +59,13 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 		}
 		const { client, match } = outcome;
 		const ensured = await client.ensure();
+		const poolKey = session.getPoolKey(match.serverId, canonicalRoot);
 		if (!ensured.ok) {
+			await session.recordStartFailure(poolKey, client);
 			failures.push(`failed to start ${match.serverId}: ${ensured.error.message}`);
 			continue;
 		}
+		session.recordStartSuccess(poolKey);
 		const version = client.documents.version(uri);
 		const nextVersion = version === undefined ? 1 : version + (event === "edit" ? 1 : 0);
 		const ticket = event === "edit" ? session.watchPublication(match.serverId, uri, nextVersion) : undefined;
