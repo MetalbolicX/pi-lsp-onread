@@ -25,7 +25,7 @@ function usage(): string {
 		"  pi-lsp-onread add <preset...> [--project <path>] [--dry-run] [--yes]",
 		"                                  Add language presets to config non-interactively",
 		"  pi-lsp-onread list                List available language presets",
-		"  pi-lsp-onread check               Validate config and PATH availability (planned)",
+		"  pi-lsp-onread check [--project <path>]  Validate config and statically check server executables",
 		"  pi-lsp-onread install [--local]   Register the Pi extension via pi install (planned)",
 		"  pi-lsp-onread --version           Print version",
 		"",
@@ -59,7 +59,7 @@ export async function main(argv: readonly string[]): Promise<number> {
 		case "add":
 			return add(argv.slice(1));
 		case "check":
-			return check();
+			return check(argv.slice(1));
 		case "install":
 			return install();
 		default:

@@ -81,13 +81,14 @@ servers, and never mutates Pi package settings.
       parent (add → usage-error exit 1; check/install stay exit 2 until T4/T5)
 - [x] Checks: typecheck, lint, test (54 passing), build
 
-### Task 4 — check command [pending]
-- [ ] RED: tests/unit/cli/check.test.ts + executables tests
-- [ ] GREEN: src/cli/commands/check.ts + src/cli/executables.ts; effective
-      config validation report; static PATH/X_OK lookup for bare names,
-      project-root-relative existence for path-bearing commands; disabled
-      servers reported skipped; exit 0 clean / 1 findings
-- Route: delegated.
+### Task 4 — check command [done]
+- [x] RED: tests/unit/cli/check.test.ts + executables.test.ts failed against stub/missing module
+- [x] GREEN: src/cli/commands/check.ts + src/cli/executables.ts (static-only
+      discovery: PATH X_OK scan / project-root resolution; no process spawn);
+      validation errors precede discovery; disabled/lsp:false skipped; missing
+      enabled executable = finding; exit 0 clean / 1 findings
+- [x] Parent-authorized minimal cli.test.ts update (check out of stub loop)
+- [x] Checks: typecheck, lint, test (64 passing), build
 
 ### Task 5 — install command + docs [pending]
 - [ ] RED: tests/unit/cli/install.test.ts
