@@ -13,7 +13,7 @@ export function computeDelta(baseline: Snapshot, current: Snapshot): DiagnosticD
 		);
 	}
 
-	const matchedBaseline = new Array<boolean>(baseline.items.length).fill(false);
+	const matchedBaseline = Array.from({ length: baseline.items.length }, (): boolean => false);
 	const newlyObserved: DiagnosticItem[] = [];
 	let unchangedCount = 0;
 

@@ -79,7 +79,7 @@ describe("computeDelta", () => {
 	});
 
 	it("rejects different URIs and names both keys", () => {
-		expect(() => computeDelta(snapshot([]), snapshot([], { uri: "file:\/\/\/b\.ts" })))
+		expect(() => computeDelta(snapshot([]), snapshot([], { uri: "file:///b.ts" })))
 			.toThrow(/ts.*file:\/\/\/a\.ts.*ts.*file:\/\/\/b\.ts/);
 	});
 
