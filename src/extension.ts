@@ -5,6 +5,7 @@ import { RuntimeSession } from "./runtime/session.js";
 import { createHookBindings } from "./pi/hooks.js";
 import { registerLspDiagnosticsTool } from "./pi/lsp-diagnostics-tool.js";
 import { registerLspSymbolsTool } from "./pi/lsp-symbols-tool.js";
+import { registerLspWorkspaceSymbolsTool } from "./pi/lsp-workspace-symbols-tool.js";
 
 type SessionFactory = (projectRoot: string) => Promise<RuntimeSession>;
 
@@ -31,6 +32,7 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 		const logError = options.logError ?? ((message, error) => console.warn(message, error));
 		if (typeof pi.registerTool === "function") registerLspDiagnosticsTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspSymbolsTool(pi, getSession);
+		if (typeof pi.registerTool === "function") registerLspWorkspaceSymbolsTool(pi, getSession);
 		createHookBindings(pi, {
 			activate: async (absoluteFilePath, event, projectRoot) => {
 				if (disposed) return undefined;
