@@ -34,7 +34,7 @@ Strict TDD mandatory for F1/F3/F4 (product behavior, deterministic tests). F2 is
 | F1 | Client retains server capabilities + advertises diagnostic client capability | delegated: gentle-ai-worker | RED/GREEN `tests/unit/lsp/client.test.ts` | done |
 | F2 | Fixture pull support (env-gated) + helper flag | delegated: gentle-ai-worker | structural + exercised by F3/F4 | done |
 | F3 | Session/activation pull flow: resultId state, full/unchanged, edit-path bounded pull | delegated: gentle-ai-worker | RED/GREEN `tests/unit/runtime/*` | done |
-| F4 | `lsp_diagnostics` registered tool, trust-gated, coverage wording | delegated: gentle-ai-worker | RED/GREEEN new `tests/unit/pi/lsp-diagnostics-tool.test.ts` | pending |
+| F4 | `lsp_diagnostics` registered tool, trust-gated, coverage wording | delegated: gentle-ai-worker | RED/GREEEN new `tests/unit/pi/lsp-diagnostics-tool.test.ts` | done |
 | F5 | README documents pull + tool | inline | structural readback | pending |
 | F6 | Full-suite close + assess + native review | inline + native | all green | pending |
 
@@ -53,6 +53,7 @@ Strict TDD mandatory for F1/F3/F4 (product behavior, deterministic tests). F2 is
 | F1 | 680749a | RED→GREEN; client suite 12/12; typecheck clean |
 | F2 | 989dcf8 | test infra; protocol smoke + structural check; defaults unchanged |
 | F3 | 1cb2545 | RED→GREEN; runtime 46/46, diagnostics 29/29, typecheck clean; session API: pullFresh(serverId, uri, timeoutMs?, client?) |
+| F4 | 4c6d05b | RED→GREEN incl. truthfulness round: pullFresh returns unsupported/failed/full/unchanged; hung pull with prior resultId can no longer masquerade as unchanged; pi 12/12, runtime 47/47 |
 
 ## Route evidence
 
