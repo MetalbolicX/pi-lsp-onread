@@ -35,8 +35,8 @@ Strict TDD is mandatory for T1–T4: observe RED (failing test) before implement
 | T2 | Delta computation module (newly observed / resolved / unchanged) | delegated: gentle-ai-worker | RED/GREEN on new `tests/unit/diagnostics/delta.test.ts` | done |
 | T3 | Delta-aware `formatForEdit` with non-causal wording + caps | delegated: gentle-ai-worker | RED/GREEN on `tests/unit/diagnostics/format.test.ts` | done |
 | T4 | Activation wires delta into edit/write path; read path unchanged; no-baseline fallback | delegated: gentle-ai-worker | RED/GREEN on `tests/unit/runtime/activation.test.ts` | done |
-| T5 | README diagnostics section documents delta output | inline (single mechanical file) | structural readback | pending |
-| T6 | Full-suite close: test/lint/typecheck/build + assess | inline + verifier per RDD tier | all green | pending |
+| T5 | README diagnostics section documents delta output | inline (single mechanical file) | structural readback | done |
+| T6 | Full-suite close: test/lint/typecheck/build + assess | inline + native review | all green; approved + acknowledged | done |
 
 ## Verification commands
 
@@ -57,6 +57,16 @@ Strict TDD is mandatory for T1–T4: observe RED (failing test) before implement
 | T2 | 5895e8b | 13 tests RED→GREEN; focused 13/13; typecheck clean; parent spot check green |
 | T3 | 6105a9a | 7 tests RED→GREEN; focused 7/7; typecheck clean; parent spot check green |
 | T4 | 8f4dd8c | 18/18 activation + 29/29 diagnostics; mixed-baseline backfill exposed publication-wait race (Promise.race→Promise.all); parent spot check green |
+| T5 | 32fe49e | README diagnostics bullet documents delta contract; structural readback |
+| T6 | 593bcac | style fixes; full suite 177/177, oxlint clean, tsc clean, build clean |
+
+## Review record
+
+- Native assessment: medium risk (executable change, 600 changed lines, slice budget reached).
+- Native review lineage `review-4a49c818f8bcbd61`: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational findings (separate later work, never re-review this candidate):
+  - R3-001 — `src/runtime/activation.ts:162` (WARNING, informational)
+  - R3-002 — `src/diagnostics/format.ts:52` (WARNING, informational)
 
 ## Route evidence
 
