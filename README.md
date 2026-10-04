@@ -8,7 +8,7 @@ Status: **early implementation** — project LSP configuration, runtime activati
 
 - **Config**: extension-owned `~/.pi/agent/lsp.json` (global) and `.pi/lsp.json` (project). OpenCode-like server entries (`command`, `extensions`, `env`, `initialization`, `disabled`) plus `languageId` and `rootMarkers` for custom languages and monorepos. Bundled JSON Schema, Draft 2020-12 (`schema/lsp.schema.json`).
 - **Activation**: the first successful read/edit/write of a matching file starts the configured server in the background, pooled per server id + project root. Loading configuration starts nothing.
-- **Diagnostics**: reads append cached errors with freshness labels — never blocking, never implying "clean". Edit/write get a bounded wait (default 5000 ms); push and pull diagnostics are supported; output is capped (default 10 items / 4000 chars).
+- **Diagnostics**: reads append cached errors with freshness labels — never blocking, never implying "clean". Edit/write get a bounded wait (default 5000 ms); v1 supports push diagnostics only; output is capped (default 10 items / 4000 chars).
 - **Boundaries**: the CLI authors configuration; the extension owns activation and feedback. Neither downloads or installs language servers, and builds are never launched automatically. Workspace trust is runtime-owned.
 
 ## CLI
@@ -35,6 +35,10 @@ Exit code **0** means success (including a successful dry-run); **1** means an e
 The extension listens for successful Pi `read`, `edit`, and `write` tool results. It creates its runtime session lazily on the first matching file result; loading the extension does not start language-server processes. Servers start only for files matched by effective configuration and roots explicitly trusted in `~/.pi/agent/lsp.trust.json` (use `pi-lsp-onread trust add [path]` to authorize an exact canonical project root). Untrusted roots never spawn servers and receive the runtime's trust guidance.
 
 Reads launch activation in the background and immediately attach any cached diagnostics; the current read does not wait for startup or diagnostics, so a later result can benefit from the warm-up. Edit and write results wait according to the effective `diagnostics.waitMs` budget (default 5000 ms) before attaching diagnostics. Feedback includes freshness/pending information and never treats silence as a clean compile. Failed Pi tool results are left untouched. Configuration, activation, or disposal errors are logged and swallowed so diagnostics never break the underlying tool call. Server-initiated requests use safe defaults: build/action prompts are declined, and server edits are never applied automatically. Session resources are disposed on Pi's `session_shutdown` event.
+
+### Per-server lifecycle settings
+
+Each server entry may optionally set `initializeTimeoutMs` (default `15000`), `requestTimeoutMs` (default `10000`), `retryCooldownMs` (default `60000`), and `maxConsecutiveStartFailures` (default `3`). Values are layered per field: project configuration overrides global configuration, and omitted values preserve the defaults. Timeouts and failure thresholds must be positive integers; retry cooldown must be a non-negative integer. Values outside the supported bounds or of an invalid type are rejected with an error naming the server and setting; they are never clamped or coerced.
 
 ## Development
 

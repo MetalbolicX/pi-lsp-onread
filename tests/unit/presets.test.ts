@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PRESETS } from "../../src/presets/catalog.js";
+import { ensureSchemaCompanion } from "../../src/cli/generate.js";
 
 const NAME_PATTERN = /^(\.[A-Za-z0-9][A-Za-z0-9_.-]*|[A-Za-z][A-Za-z0-9_.-]*)$/;
 
@@ -60,5 +61,23 @@ describe("bundled JSON schema", () => {
 
 	it("rejects unknown fields at the top level", () => {
 		expect(schema.additionalProperties).toBe(false);
+	});
+
+	it("emits the current schema as the CLI companion copy", () => {
+		const generated = ensureSchemaCompanion({ source: { version: 1 } });
+		expect(generated.companion).toBeDefined();
+		const copy = JSON.parse(generated.companion ?? "{}") as { $defs: { server: { properties: Record<string, unknown> } } };
+		expect(copy.$defs.server.properties.initializeTimeoutMs).toBeDefined();
+		expect(copy.$defs.server.properties.maxConsecutiveStartFailures).toBeDefined();
+	});
+
+	it("exposes bounded per-server lifecycle settings in the self-contained schema", () => {
+		const parsed = schema as typeof schema & { $defs: { server: { additionalProperties: boolean; properties: Record<string, { type?: string; minimum?: number }> } } };
+		const { $defs: { server } } = parsed;
+		expect(server.additionalProperties).toBe(false);
+		expect(server.properties.initializeTimeoutMs).toMatchObject({ type: "integer", minimum: 1 });
+		expect(server.properties.requestTimeoutMs).toMatchObject({ type: "integer", minimum: 1 });
+		expect(server.properties.retryCooldownMs).toMatchObject({ type: "integer", minimum: 0 });
+		expect(server.properties.maxConsecutiveStartFailures).toMatchObject({ type: "integer", minimum: 1 });
 	});
 });

@@ -27,6 +27,10 @@ export interface ServerConfig {
 	env?: Record<string, string>;
 	initialization?: Record<string, unknown>;
 	settings?: Record<string, unknown>;
+	initializeTimeoutMs?: number;
+	requestTimeoutMs?: number;
+	retryCooldownMs?: number;
+	maxConsecutiveStartFailures?: number;
 	diagnostics?: ServerDiagnosticsConfig;
 }
 

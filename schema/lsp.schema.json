@@ -75,6 +75,30 @@
 					"type": "object",
 					"description": "Server configuration returned for workspace/configuration requests and didChangeConfiguration (free-form)."
 				},
+				"initializeTimeoutMs": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 600000,
+					"description": "LSP initialize timeout in milliseconds (default 15000)."
+				},
+				"requestTimeoutMs": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 600000,
+					"description": "LSP request timeout in milliseconds (default 10000)."
+				},
+				"retryCooldownMs": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 86400000,
+					"description": "Delay before retrying a failed server start (default 60000)."
+				},
+				"maxConsecutiveStartFailures": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"description": "Consecutive failed starts before disabling the server for this session (default 3)."
+				},
 				"diagnostics": {
 					"$ref": "#/$defs/serverDiagnostics"
 				}

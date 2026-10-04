@@ -102,12 +102,14 @@ export class RuntimeSession {
 
 	getOrCreateClient(key: string, options: ClientFactoryOptions): Promise<ClientFactoryResult> {
 		if (this.disposed) return Promise.resolve({ ok: false, message: "LSP session is disposed" });
+		const retryCooldownMs = options.server.retryCooldownMs ?? this.retryCooldownMs;
+		const maxConsecutiveStartFailures = options.server.maxConsecutiveStartFailures ?? this.maxConsecutiveStartFailures;
 		const failure = this.failureStates.get(key);
 		if (failure?.disabledForSession) {
 			return Promise.resolve({ ok: false, message: `server ${options.serverId} disabled for session after ${failure.consecutiveFailures} consecutive start failures` });
 		}
 		if (failure && failure.consecutiveFailures > 0) {
-			const remainingMs = this.retryCooldownMs - (this.clock() - failure.lastFailedAt);
+			const remainingMs = retryCooldownMs - (this.clock() - failure.lastFailedAt);
 			if (remainingMs > 0) {
 				return Promise.resolve({ ok: false, message: `server ${options.serverId} retry in ${Math.ceil(remainingMs)}ms` });
 			}
@@ -125,14 +127,14 @@ export class RuntimeSession {
 				}
 				if (result.ok) {
 					this.pool.set(key, result.client);
-					this.attachDiagnostics(result.client, key);
+					this.attachDiagnostics(result.client, key, maxConsecutiveStartFailures);
 				} else if (!this.disposed) {
-					this.recordStartFailure(key);
+					this.recordStartFailure(key, undefined, maxConsecutiveStartFailures);
 				}
 				return result;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				if (!this.disposed) this.recordStartFailure(key);
+				if (!this.disposed) this.recordStartFailure(key, undefined, maxConsecutiveStartFailures);
 				return { ok: false, message };
 			} finally {
 				this.pendingClients.delete(key);
@@ -142,13 +144,18 @@ export class RuntimeSession {
 		return creation;
 	}
 
-	async recordStartFailure(key: string, client?: LspClient): Promise<void> {
+	async recordStartFailure(key: string, client?: LspClient, maxFailures?: number): Promise<void> {
+		const serverId = key.slice(0, key.indexOf("::"));
+		const configuredLimit = this.configResult.ok && this.configResult.config.lsp !== false
+			? this.configResult.config.lsp[serverId]?.maxConsecutiveStartFailures
+			: undefined;
+		const failureLimit = maxFailures ?? configuredLimit ?? this.maxConsecutiveStartFailures;
 		if (!client || !this.countedFailureClients.has(client)) {
 			if (client) this.countedFailureClients.add(client);
 			const state = this.failureStates.get(key) ?? { consecutiveFailures: 0, lastFailedAt: 0, disabledForSession: false };
 			state.consecutiveFailures += 1;
 			state.lastFailedAt = this.clock();
-			state.disabledForSession = state.consecutiveFailures >= this.maxConsecutiveStartFailures;
+			state.disabledForSession = state.consecutiveFailures >= failureLimit;
 			this.failureStates.set(key, state);
 		}
 		if (client && this.pool.get(key) === client) {
@@ -174,8 +181,8 @@ export class RuntimeSession {
 		return { promise, cancel: () => this.pendingSnapshots.delete(waiter) };
 	}
 
-	attachDiagnostics(client: LspClient, key?: string): void {
-		if (key && typeof client.onFailure === "function") client.onFailure(() => { void this.recordStartFailure(key, client); });
+	attachDiagnostics(client: LspClient, key?: string, maxFailures = this.maxConsecutiveStartFailures): void {
+		if (key && typeof client.onFailure === "function") client.onFailure(() => { void this.recordStartFailure(key, client, maxFailures); });
 		client.onPublishDiagnostics((event) => {
 			const version = typeof event.version === "number" ? event.version : null;
 			const snapshot: Snapshot = {
@@ -231,6 +238,8 @@ async function defaultClientFactory(options: ClientFactoryOptions): Promise<Clie
 			rootUri: pathToFileURL(options.root).href,
 			initializationOptions: server.initialization,
 			settings: server.settings,
+			initializeTimeoutMs: server.initializeTimeoutMs,
+			requestTimeoutMs: server.requestTimeoutMs,
 		}),
 	};
 }

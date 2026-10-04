@@ -45,6 +45,26 @@ function fakeClient(ensures: ClientResult[]): LspClient {
 const failedEnsure: ClientResult = { ok: false, error: { kind: "timeout", message: "initialize timed out after 50ms" } };
 
 describe("session retry policy", () => {
+	it("uses per-server retry cooldown and failure threshold from effective configuration", async () => {
+		const project = await createProject();
+		projects.push(project.projectRoot);
+		let attempts = 0;
+		const config = fakeConfig();
+		if (config.lsp === false || !config.lsp.fake) throw new Error("Expected configured server");
+		Object.assign(config.lsp.fake, { retryCooldownMs: 0, maxConsecutiveStartFailures: 3 });
+		const session = await RuntimeSession.create({
+			config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath,
+			clientFactory: async () => {
+				attempts += 1;
+				return { ok: false, message: "spawn failure" };
+			},
+		});
+		sessions.push(session);
+		await activate(session, project.filePath, "read");
+		await activate(session, project.filePath, "read");
+		expect(attempts).toBe(2);
+	});
+
 	it("reports a failure, suppresses an immediate retry, then retries after cooldown", async () => {
 		let now = 1000;
 		const { filePath, session, calls } = await setup(async () => { throw new Error("spawn failure"); }, {
@@ -167,6 +187,19 @@ describe("session retry policy", () => {
 		publish({ serverId: "fake", uri: "file:///current.ts", version: 1, diagnostics: [] });
 		expect(session.diagnostics.get("fake", "file:///current.ts")?.version).toBe(2);
 	});
+
+	it("forwards configured initialize timeout through the default client factory", async () => {
+		const project = await createProject();
+		projects.push(project.projectRoot);
+		const config = fakeConfig({ command: [process.execPath, fixtureServer] });
+		if (config.lsp === false || !config.lsp.fake) throw new Error("Expected configured server");
+		config.lsp.fake.initializeTimeoutMs = 35;
+		config.lsp.fake.env = { FAKE_HANG_INITIALIZE: "1" };
+		const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
+		sessions.push(session);
+		const result = await activate(session, project.filePath, "read");
+		expect(result.kind === "ok" && result.formatted).toContain("initialize timed out after 35ms");
+	}, 5000);
 
 	it("reports initialize timeout and does not spawn again during cooldown", async () => {
 		const project = await createProject();

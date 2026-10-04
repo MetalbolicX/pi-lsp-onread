@@ -24,8 +24,20 @@ export function validateEffectiveConfig(value: unknown): EffectiveValidationResu
 				continue;
 			}
 			const { disabled, command, extensions, languageId } = rawServer;
+			const lifecycleBounds: Record<string, { minimum: number; maximum?: number }> = {
+				initializeTimeoutMs: { minimum: 1, maximum: 600_000 },
+				requestTimeoutMs: { minimum: 1, maximum: 600_000 },
+				retryCooldownMs: { minimum: 0, maximum: 86_400_000 },
+				maxConsecutiveStartFailures: { minimum: 1, maximum: 100 },
+			};
+			for (const [field, bounds] of Object.entries(lifecycleBounds)) {
+				const setting = rawServer[field];
+				if (setting === undefined) continue;
+				if (typeof setting !== "number" || !Number.isInteger(setting) || setting < bounds.minimum || (bounds.maximum !== undefined && setting > bounds.maximum)) {
+					errors.push(`${path}/${field}: must be an integer between ${bounds.minimum} and ${bounds.maximum ?? "infinity"}`);
+				}
+			}
 			if (disabled === true) continue;
-
 
 			if (!Array.isArray(command) || command.length === 0 || command.some((part) => typeof part !== "string" || part.length === 0)) {
 				errors.push(`${path}/command: enabled server requires a nonempty argv array of nonempty strings; shell command strings are not accepted`);
