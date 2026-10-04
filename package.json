@@ -40,14 +40,14 @@
 	},
 	"dependencies": {
 		"ajv": "^8.20.0",
-		"vscode-languageserver-protocol": "^3.17.5"
+		"vscode-languageserver-protocol": "^3.18.4"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "^1.0.0",
-		"@types/node": "^26.6.2",
-		"oxlint": "^1.85.0",
-		"rolldown": "^1.2.4",
+		"@types/node": "^26.6.4",
+		"oxlint": "^1.86.0",
+		"rolldown": "^1.2.12",
 		"typescript": "~7.0.2",
-		"vitest": "^5.0.1"
+		"vitest": "^5.0.3"
 	}
 }
