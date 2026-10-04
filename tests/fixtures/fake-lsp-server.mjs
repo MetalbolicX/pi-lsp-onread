@@ -5,7 +5,9 @@ let input = "";
 const documents = new Map();
 const lastResultIds = new Map();
 const pullDiagnostics = process.env.FAKE_PULL_DIAGNOSTICS === "1";
+const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
+const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
 
 function send(message) {
 	const body = Buffer.from(JSON.stringify(message));
@@ -70,8 +72,11 @@ function handle(message) {
 	} else if (message.method === "initialize") {
 		if (process.env.FAKE_HANG_INITIALIZE === "1") return;
 		const capabilities = { textDocumentSync: 1 };
-		if (pullDiagnostics) {
-			capabilities.diagnosticProvider = { interFileDependencies: false, workspaceDiagnostics: false };
+		if (pullDiagnostics || workspaceDiagnostics) {
+			capabilities.diagnosticProvider = {
+				interFileDependencies: false,
+				workspaceDiagnostics,
+			};
 		}
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
@@ -105,6 +110,20 @@ function handle(message) {
 			? { kind: "unchanged", resultId }
 			: { kind: "full", resultId, items: diagnosticsFor(text) };
 		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "workspace/diagnostic" && workspaceDiagnostics) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const previousResultIds = message.params?.previousResultIds ?? {};
+		const items = [...documents.entries()]
+			.sort(([uriA], [uriB]) => uriA.localeCompare(uriB))
+			.map(([uri, { text }]) => {
+				const resultId = createHash("sha256").update(text).digest("hex");
+				const previousResultId = previousResultIds[uri];
+				lastResultIds.set(uri, resultId);
+				return previousResultId === resultId
+					? { uri, kind: "unchanged", resultId }
+					: { uri, kind: "full", resultId, items: diagnosticsFor(text) };
+			});
+		setTimeout(() => send({ jsonrpc: "2.0", id: message.id, result: { items } }), workspaceDelayMs);
 	} else if (message.method === "exit") {
 		process.exit(0);
 	} else if (message.id !== undefined) {
