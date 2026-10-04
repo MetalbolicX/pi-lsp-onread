@@ -265,6 +265,46 @@ export class RuntimeSession {
 		}
 	}
 
+	async definition(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.definitionProvider) return { outcome: "unsupported", locations: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", locations: [] };
+			const response = await client.request<unknown>("textDocument/definition", {
+				textDocument: { uri },
+				position: { line, character },
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", locations: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", locations: [] };
+			if (Array.isArray(response.value)) return { outcome: "ok", locations: response.value.slice(0, 1000) };
+			if (typeof response.value === "object") return { outcome: "ok", locations: [response.value] };
+			return { outcome: "failed", locations: [] };
+		} catch {
+			return { outcome: "failed", locations: [] };
+		}
+	}
+
+	async references(serverId: string, uri: string, line: number, character: number, includeDeclaration: boolean, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.referencesProvider) return { outcome: "unsupported", locations: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", locations: [] };
+			const response = await client.request<unknown>("textDocument/references", {
+				textDocument: { uri },
+				position: { line, character },
+				context: { includeDeclaration },
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", locations: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", locations: [] };
+			if (Array.isArray(response.value)) return { outcome: "ok", locations: response.value.slice(0, 1000) };
+			return { outcome: "failed", locations: [] };
+		} catch {
+			return { outcome: "failed", locations: [] };
+		}
+	}
+
 	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "full" | "unchanged"> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]

@@ -364,6 +364,124 @@ describe("RuntimeSession", () => {
 		} finally { await session.dispose(); }
 	});
 
+	describe.each([
+		{
+			name: "definition",
+			capability: "definitionProvider",
+			method: "textDocument/definition",
+			invoke: (session: RuntimeSession, client: LspClient, timeoutMs = 1234) => session.definition("fake", "file:///target.ts", -2, 19, timeoutMs, client),
+			params: { textDocument: { uri: "file:///target.ts" }, position: { line: -2, character: 19 } },
+		},
+		{
+			name: "references",
+			capability: "referencesProvider",
+			method: "textDocument/references",
+			invoke: (session: RuntimeSession, client: LspClient, timeoutMs = 1234, includeDeclaration = true) => session.references("fake", "file:///target.ts", -2, 19, includeDeclaration, timeoutMs, client),
+			params: { textDocument: { uri: "file:///target.ts" }, position: { line: -2, character: 19 }, context: { includeDeclaration: true } },
+		},
+	])("$name requests", ({ name, capability, method, invoke, params }) => {
+		async function setupRequest(value: unknown, requestOk = true) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			let args: unknown[] = [];
+			const client = {
+				capabilities: () => ({ [capability]: true }),
+				request: async (...requestArgs: unknown[]) => { args = requestArgs; return requestOk ? { ok: true, value } : { ok: false }; },
+				documents: { version: () => undefined },
+			} as unknown as LspClient;
+			return { session, client, getArgs: () => args };
+		}
+
+		it("returns array results and sends exact request params", async () => {
+			const locations = [{ uri: "file:///a.ts" }, { uri: "file:///b.ts" }];
+			const { session, client, getArgs } = await setupRequest(locations);
+			try {
+				expect(await invoke(session, client)).toEqual({ outcome: "ok", locations });
+				expect(getArgs()).toEqual([method, params, 1234]);
+			} finally { await session.dispose(); }
+		});
+
+		it("treats null results as an empty successful answer", async () => {
+			const { session, client } = await setupRequest(null);
+			try { expect(await invoke(session, client)).toEqual({ outcome: "ok", locations: [] }); }
+			finally { await session.dispose(); }
+		});
+
+		it("returns unsupported without capability or a resolved client", async () => {
+			const { session, client } = await setupRequest([]);
+			const incapable = { ...client, capabilities: () => ({}) } as unknown as LspClient;
+			try {
+				expect(await invoke(session, incapable)).toEqual({ outcome: "unsupported", locations: [] });
+				const unresolved = name === "definition"
+					? await session.definition("missing", "file:///target.ts", -2, 19)
+					: await session.references("missing", "file:///target.ts", -2, 19, true);
+				expect(unresolved).toEqual({ outcome: "unsupported", locations: [] });
+			} finally { await session.dispose(); }
+		});
+
+		it.each([
+			["request errors", async () => { throw new Error("request failed"); }],
+			["request timeouts", async () => { throw new Error("timed out"); }],
+			["not-ok responses", async () => ({ ok: false })],
+		])("fails on %s without throwing", async (_label, request) => {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			const client = { capabilities: () => ({ [capability]: true }), request, documents: { version: () => undefined } } as unknown as LspClient;
+			try { expect(await invoke(session, client)).toEqual({ outcome: "failed", locations: [] }); }
+			finally { await session.dispose(); }
+		});
+
+		it("fails before requesting when timeout is non-positive", async () => {
+			const { session, client, getArgs } = await setupRequest([]);
+			try {
+				expect(await invoke(session, client, 0)).toEqual({ outcome: "failed", locations: [] });
+				expect(getArgs()).toEqual([]);
+			} finally { await session.dispose(); }
+		});
+
+		it("caps valid arrays at 1000 entries", async () => {
+			const locations = Array.from({ length: 1001 }, (_, index) => ({ index }));
+			const { session, client } = await setupRequest(locations);
+			try {
+				const result = await invoke(session, client);
+				expect(result.outcome).toBe("ok");
+				expect(result.locations).toHaveLength(1000);
+				expect(result.locations[999]).toEqual(locations[999]);
+			} finally { await session.dispose(); }
+		});
+	});
+
+	it("wraps a single definition location object and rejects primitive results", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const location = { uri: "file:///definition.ts" };
+		const client = { capabilities: () => ({ definitionProvider: true }), request: async () => ({ ok: true, value: location }), documents: { version: () => undefined } } as unknown as LspClient;
+		try {
+			expect(await session.definition("fake", "file:///target.ts", 0, 0, 1000, client)).toEqual({ outcome: "ok", locations: [location] });
+			const primitive = { ...client, request: async () => ({ ok: true, value: 42 }) } as unknown as LspClient;
+			expect(await session.definition("fake", "file:///target.ts", 0, 0, 1000, primitive)).toEqual({ outcome: "failed", locations: [] });
+		} finally { await session.dispose(); }
+	});
+
+	it.each([true, false])("passes references includeDeclaration=%s exactly", async (includeDeclaration) => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		let args: unknown[] = [];
+		const client = { capabilities: () => ({ referencesProvider: true }), request: async (...received: unknown[]) => { args = received; return { ok: true, value: [] }; }, documents: { version: () => undefined } } as unknown as LspClient;
+		try {
+			expect(await session.references("fake", "file:///target.ts", -2, 19, includeDeclaration, 1234, client)).toEqual({ outcome: "ok", locations: [] });
+			expect(args).toEqual(["textDocument/references", { textDocument: { uri: "file:///target.ts" }, position: { line: -2, character: 19 }, context: { includeDeclaration } }, 1234]);
+		} finally { await session.dispose(); }
+	});
+
+	it("rejects an object references result", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const client = { capabilities: () => ({ referencesProvider: true }), request: async () => ({ ok: true, value: { uri: "file:///reference.ts" } }), documents: { version: () => undefined } } as unknown as LspClient;
+		try { expect(await session.references("fake", "file:///target.ts", 0, 0, true, 1000, client)).toEqual({ outcome: "failed", locations: [] }); }
+		finally { await session.dispose(); }
+	});
+
 	it("loads its trust store once and exposes deterministic pool keys", async () => {
 		const { projectRoot, trustStorePath } = await setup();
 		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
