@@ -36,7 +36,9 @@ Roadmap T1.5 covers "workspace/document symbols". The agreed ~400 authored-line 
 | S3 | `3dd25ae` | feat(symbols): add bounded document symbol formatting (incl. kind-0 label fix, observed RED → GREEN) |
 | S4 | `dd3b000` | feat(tools): add lsp_symbols document outline tool |
 | S5 | `a2a8c12` | docs: document lsp_symbols tool |
-| S6 | _pending_ | closure docs + review record |
+| S6 | `f3aaaea` | docs: record symbol-outline closure evidence |
+
+Review-record commit: follows as `docs: record symbol-outline review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (S6)
 
@@ -46,7 +48,12 @@ Roadmap T1.5 covers "workspace/document symbols". The agreed ~400 authored-line 
 
 ## Review record
 
-- _pending at close (S6)._
+- ASSESS (committed range, base `6473a63`, committedOnly): medium risk, executable change (`src/extension.ts`), 11 paths / 582 lines, reviewDue = `slice_budget_reached`; plan = writerSelfVerification (no separate verifier required). First ASSESS without baseRef failed `no pending changes` — rerun with explicit baseRef is the documented continuation.
+- One stale consent binding (`ec97e822…`, expired; no lineage), second START created lineage `review-392a360d4fc180e4` (medium, review-reliability), host resolved consent directly.
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational findings (separate later work):
+  - R3-001 — `src/runtime/activation.ts:166` (WARNING)
+  - R3-002 — `src/runtime/activation.ts:207` (WARNING)
 
 ## Route evidence
 
