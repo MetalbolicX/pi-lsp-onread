@@ -250,6 +250,21 @@ export class RuntimeSession {
 		}
 	}
 
+	async workspaceSymbols(serverId: string, query: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; symbols: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.workspaceSymbolProvider) return { outcome: "unsupported", symbols: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", symbols: [] };
+			const response = await client.request<unknown>("workspace/symbol", { query }, timeoutMs);
+			if (!response.ok || !response.value || typeof response.value !== "object") return { outcome: "failed", symbols: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", symbols: [] };
+			return { outcome: "ok", symbols: response.value.slice(0, 1000) };
+		} catch {
+			return { outcome: "failed", symbols: [] };
+		}
+	}
+
 	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "full" | "unchanged"> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]
