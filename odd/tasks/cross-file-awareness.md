@@ -31,11 +31,11 @@ Strict TDD mandatory for X2/X3 (product behavior). X1 is test infrastructure (no
 
 | ID | Task | Route | Checks | Status |
 | --- | --- | --- | --- | --- |
-| X1 | Fixture workspace-diagnostics mode + helper flag | delegated | structural + exercised by X2/X3 | pending |
-| X2 | Session: workspace pull + changedSince query | delegated | RED/GREEN `tests/unit/runtime/session.test.ts` | pending |
-| X3 | Activation: cross-file section + coverage wording + caps | delegated | RED/GREEN `tests/unit/runtime/activation.test.ts` | pending |
-| X4 | README documents cross-file behavior | inline | structural readback | pending |
-| X5 | Full-suite close + assess + native review | inline + native | all green | pending |
+| X1 | Fixture workspace-diagnostics mode + helper flag | delegated | structural + exercised by X2/X3 | done |
+| X2 | Session: workspace pull + changedSince query | delegated | RED/GREEN `tests/unit/runtime/session.test.ts` | done |
+| X3 | Activation: cross-file section + coverage wording + caps | delegated | RED/GREEN `tests/unit/runtime/activation.test.ts` | done |
+| X4 | README documents cross-file behavior | inline | structural readback | done |
+| X5 | Full-suite close + assess + native review | inline + native | all green; review below | done |
 
 ## Verification commands
 
@@ -49,7 +49,15 @@ Feature-branch chain (cached user choice). Forecast ~450 authored lines.
 
 | Task | Commit | Notes |
 | --- | --- | --- |
-| — | — | — |
+| X1 | f21d00d | test infra; structural check; runtime 52/52; defaults unchanged |
+| X2 | 4ffdd8a | 6 tests RED→GREEN; session 14/14, diagnostics 30/30, tsc clean |
+| X3 | e6755b1 | section tests RED→GREEN; activation 29/29, runtime 64/64, tsc clean |
+| X4 | 81dee01 | README cross-file bullet; structural readback |
+| X5 | 3357218 | style fix (oxlint); full suite 208/208, lint 0, tsc clean, build clean |
+
+## Review record
+
+- Native assessment and lineage recorded at close (see below after review completes).
 
 ## Route evidence
 
