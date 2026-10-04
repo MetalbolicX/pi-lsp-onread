@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDocumentSymbols } from "../../../src/symbols/format.js";
+import { formatDocumentSymbols, formatWorkspaceSymbols } from "../../../src/symbols/format.js";
 
 const symbol = (name: string, overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
 	name,
@@ -7,6 +7,76 @@ const symbol = (name: string, overrides: Record<string, unknown> = {}): Record<s
 });
 
 const unlimited = Number.MAX_SAFE_INTEGER;
+
+describe("formatWorkspaceSymbols", () => {
+	it("decodes file URIs and prints one-based range coordinates", () => {
+		expect(formatWorkspaceSymbols([symbol("Widget", {
+			kind: 5,
+			location: { uri: "file:///workspace/My%20Project/file.ts", range: { start: { line: 0, character: 2 }, end: { line: 4, character: 8 } } },
+		})], unlimited)).toBe("Widget [class] /workspace/My Project/file.ts:1:3");
+	});
+
+	it("prints non-file URIs unchanged", () => {
+		expect(formatWorkspaceSymbols([symbol("Remote", { location: { uri: "https://example.test/a%20b" } })], unlimited))
+			.toBe("Remote [symbol] https://example.test/a%20b (range unknown)");
+	});
+
+	it("marks missing or unreadable ranges as unknown", () => {
+		expect(formatWorkspaceSymbols([symbol("Unranged", { location: { uri: "file:///tmp/a" } })], unlimited))
+			.toBe("Unranged [symbol] /tmp/a (range unknown)");
+	});
+
+	it("marks missing locations or URIs as unknown", () => {
+		expect(formatWorkspaceSymbols([symbol("Missing"), symbol("Empty URI", { location: { uri: "" } })], unlimited)).toBe([
+			"Missing [symbol] (location unknown)",
+			"Empty URI [symbol] (location unknown)",
+		].join("\n"));
+	});
+
+	it("skips and counts malformed entries", () => {
+		expect(formatWorkspaceSymbols([null, 3, {}, { name: 4 }, symbol("Readable")], unlimited)).toBe([
+			"Readable [symbol] (location unknown)",
+			"… 4 unreadable symbol entries omitted",
+		].join("\n"));
+	});
+
+	it("truncates after 300 entries and reports the rest", () => {
+		const output = formatWorkspaceSymbols(Array.from({ length: 301 }, (_unused, index) => symbol(`S${index + 1}`)), unlimited).split("\n");
+		expect(output).toHaveLength(301);
+		expect(output[0]).toBe("S1 [symbol] (location unknown)");
+		expect(output[299]).toBe("S300 [symbol] (location unknown)");
+		expect(output[300]).toBe("… 1 symbol entries not shown");
+	});
+
+	it("respects the exact character budget including omission-line reservation", () => {
+		const firstLine = "A [symbol] (location unknown)";
+		const omitted = "… 1 symbol entries not shown";
+		const maxChars = firstLine.length + 1 + omitted.length;
+		const output = formatWorkspaceSymbols([symbol("A"), symbol("B")], maxChars);
+		expect(output).toBe(`${firstLine}\n${omitted}`);
+		expect(output.length).toBe(maxChars);
+	});
+
+	it("returns an empty string for empty input", () => {
+		expect(formatWorkspaceSymbols([], unlimited)).toBe("");
+	});
+
+	it("reuses kind labels and falls back for unknown, zero, and absent kinds", () => {
+		expect(formatWorkspaceSymbols([
+			symbol("Class", { kind: 5 }),
+			symbol("Function", { kind: 12 }),
+			symbol("Unknown", { kind: 99 }),
+			symbol("Zero", { kind: 0 }),
+			symbol("Absent"),
+		], unlimited)).toBe([
+			"Class [class] (location unknown)",
+			"Function [function] (location unknown)",
+			"Unknown [symbol] (location unknown)",
+			"Zero [symbol] (location unknown)",
+			"Absent [symbol] (location unknown)",
+		].join("\n"));
+	});
+});
 
 describe("formatDocumentSymbols", () => {
 	it("flattens nested symbols in pre-order with depth indentation", () => {

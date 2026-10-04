@@ -65,6 +65,30 @@ export function formatDocumentSymbols(symbols: unknown[], maxChars: number): str
 	return "";
 }
 
+export function formatWorkspaceSymbols(symbols: unknown[], maxChars: number): string {
+	const readable: string[] = [];
+	let unreadableCount = 0;
+
+	for (const entry of symbols) {
+		if (!isRecord(entry) || typeof entry.name !== "string") {
+			unreadableCount++;
+			continue;
+		}
+		readable.push(formatWorkspaceLine(entry));
+	}
+
+	const maxEmitted = Math.min(MAX_ENTRIES, readable.length);
+	for (let emitted = maxEmitted; emitted >= 0; emitted--) {
+		const omittedReadable = readable.length - emitted;
+		const lines = readable.slice(0, emitted);
+		if (omittedReadable > 0) lines.push(`… ${omittedReadable} symbol entries not shown`);
+		if (unreadableCount > 0) lines.push(`… ${unreadableCount} unreadable symbol entries omitted`);
+		const output = lines.join("\n");
+		if (output.length <= maxChars) return output;
+	}
+	return "";
+}
+
 function formatLine(entry: Record<string, unknown>, depth: number): string {
 	const kind = typeof entry.kind === "number" ? KIND_LABELS[entry.kind] ?? "symbol" : "symbol";
 	const range = readableRange(entry.range);
@@ -72,6 +96,26 @@ function formatLine(entry: Record<string, unknown>, depth: number): string {
 		? ` L${range.startLine + 1}:${range.startCharacter + 1}-${range.endLine + 1}:${range.endCharacter + 1}`
 		: " (location unknown)";
 	return `${"  ".repeat(depth)}${entry.name as string} [${kind}]${location}`;
+}
+
+function formatWorkspaceLine(entry: Record<string, unknown>): string {
+	const kind = typeof entry.kind === "number" ? KIND_LABELS[entry.kind] ?? "symbol" : "symbol";
+	const location = isRecord(entry.location) ? entry.location : undefined;
+	const uri = location?.uri;
+	if (typeof uri !== "string" || uri.length === 0) return `${entry.name as string} [${kind}] (location unknown)`;
+
+	let path = uri;
+	if (uri.startsWith("file://")) {
+		try {
+			path = decodeURIComponent(uri.slice("file://".length));
+		} catch {
+			// Keep malformed file URIs readable rather than hiding the symbol.
+		}
+	}
+	const range = readableRange(location?.range);
+	return range
+		? `${entry.name as string} [${kind}] ${path}:${range.startLine + 1}:${range.startCharacter + 1}`
+		: `${entry.name as string} [${kind}] ${path} (range unknown)`;
 }
 
 interface ReadableRange {
