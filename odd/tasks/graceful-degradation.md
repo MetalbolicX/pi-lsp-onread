@@ -59,23 +59,33 @@ default. No redesign of the approved retry policy.
   deadline win (current paths return outcomes; T2 covers failure
   accounting).
 
-### T2 — Lifecycle reliability: dead transports, races, shutdown (test-first) [pending]
-- [ ] Probe and record what the protocol connection emits on clean child
-      exit after readiness (new exit-after-ready mode in
-      `tests/fixtures/fake-lsp-server.mjs`)
-- [ ] RED/GREEN: post-ready child exit / connection close → client failure
-      state; pooled client evicted + disposed (reuse `recordStartFailure`);
-      honest per-server failure line; next activation respawns under the
-      existing cooldown/three-strike rules
-- [ ] RED/GREEN: `dispose()` clears/aways `pendingClients`; activation after
-      dispose refused; no leak of late-finishing clients
-- [ ] RED/GREEN: late or generation-mismatched diagnostics never presented
-      as current; concurrent activation counts one attempt/one failure per
-      pool key
-- [ ] Regression: cooldown suppression, disable-after-3, per-server/root
-      isolation unchanged (existing retry-policy tests stay green)
-- [ ] Checks: full gate
-- Route: delegated.
+### T2 — Lifecycle reliability: dead transports, races, shutdown (test-first) [done]
+- [x] Probe: protocol connection emits `onClose` after clean child exit;
+      close can precede the child `exit` event (observed exit code 0).
+      Recorded in client.ts + probe test
+- [x] RED/GREEN: post-ready clean exit left client `ready` before; now
+      close/exit → `failed` state (first failure wins), failure listeners,
+      pool eviction + disposal, honest line, respawn under existing
+      cooldown/three-strike rules; one crash = one consecutive failure
+      (WeakSet dedup)
+- [x] RED/GREEN: `dispose()` idempotent, awaits `pendingClients`, late
+      factory results disposed + refused without counting; activation after
+      dispose refused
+- [x] RED/GREEN: store rejects older/unversioned publications replacing a
+      versioned snapshot; concurrent cold-start coalescing regression-tested
+- [x] Regression: cooldown suppression, disable-after-3, success reset,
+      per-server/root isolation green; request-timeout semantics unchanged
+- [x] T1 review note resolved: `Promise.race` keeps handlers on background
+      work — late rejection observed; no catch needed
+- [x] Checks: typecheck, lint, test (139 passing / 26 files), build
+- Route: delegated (gentle-ai-worker).
+- Commit: `0e3f439` — feat(runtime): detect dead transports and harden
+  session lifecycle (8 files, +180/−21)
+- Assess: medium, writerProfile large (runtime), self-verification stands;
+  reviewDue TRUE (slice_budget_reached, 531 lines over main) → slice-close
+  native review due before T3; native continuation: `gentle-ai review
+  status --cwd=<repo> --contract=gentle-ai.review-integration/v2
+  --next-transition=true --base-ref=main --committed-only=true`
 
 ### T3 — Config exposure: schema, merge, validate, wiring, docs (test-first) [pending]
 - [ ] `schema/lsp.schema.json`: optional per-server lifecycle integers with
@@ -129,3 +139,9 @@ default. No redesign of the approved retry policy.
   full suite and reviewed the diff. Assess medium/large-writer →
   self-verification stands; review deferred to slice close (running count
   102 authored lines incl. housekeeping). T2 delegated.
+- 2026-10-04: T2 complete — 0e3f439. RED observed for dead-transport,
+  shutdown-race, and stale-publication gaps; 139 tests / 26 files; parent
+  spot check re-ran suite + reviewed session/client/store diffs. Assess
+  medium/large-writer → self-verification stands; reviewDue true
+  (slice_budget_reached, 531 lines) → delivery menu + slice-close review
+  before T3.
