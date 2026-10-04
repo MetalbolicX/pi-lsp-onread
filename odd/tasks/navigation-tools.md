@@ -37,7 +37,9 @@ Non-blocking; read-only annotations; never imply completeness; explicit `unsuppo
 | N3 | `867e03c` | feat(navigation): add bounded location formatting |
 | N4 | `331a253` | feat(tools): add lsp_definition and lsp_references tools |
 | N5 | `fb851c8` | docs: document navigation tools |
-| N6 | _pending_ | closure + review record |
+| N6 | `79fbfc4` | docs: record navigation-tools closure evidence |
+
+Review-record commit: follows as `docs: record navigation-tools review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (N6)
 
@@ -47,7 +49,13 @@ Non-blocking; read-only annotations; never imply completeness; explicit `unsuppo
 
 ## Review record
 
-- _pending at close (N6)._
+- ASSESS (committed range, base `3d7fd77`, committedOnly): medium risk, executable change (`src/extension.ts`), 11 paths / 704 lines, reviewDue = `slice_budget_reached`; plan = writerSelfVerification (independent battery already run).
+- **First START failed at preflight with `lens_context_budget_exceeded`** (cumulative main-based candidate, ~3400 lines across 32 paths): no lineage created, retry-safe, native guidance "reduce candidate scope / split into smaller reviewable commits". This candidate (cumulative base-diff vs main) could never succeed on retry.
+- Remedy per contract: START with explicit `baseRef` = full `3d7fd774d37442ffa5f005e11ad6010cf002bc2f` + `committedOnly: true` → reduced committed range (11 paths / 704 lines). One abbreviated-hash rejection (`base-ref-unresolvable`) and one stale consent binding preceded the successful attempt.
+- Reduced-scope lineage `review-0df57a968f39df16` (medium, review-reliability) → **approved** → acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-001 — `src/pi/lsp-navigation-tools.ts:89` (WARNING)
+- **Operational lesson**: as the branch chain grows, the default cumulative main-based candidate eventually exceeds the reviewer context budget; future slice STARTs on long chains should request the explicit branch-base committed range from the outset.
 
 ## Route evidence
 
