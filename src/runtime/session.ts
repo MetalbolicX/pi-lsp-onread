@@ -198,7 +198,7 @@ export class RuntimeSession {
 			}
 			const response = await client.request<unknown>("workspace/diagnostic", { previousResultIds }, timeoutMs);
 			if (!response.ok || !response.value || typeof response.value !== "object") return "failed";
-			const items = (response.value as { items?: unknown }).items;
+			const { items } = response.value as { items?: unknown };
 			if (!Array.isArray(items)) return "failed";
 			for (const value of items) {
 				if (!value || typeof value !== "object") continue;
