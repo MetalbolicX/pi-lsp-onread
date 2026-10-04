@@ -8,6 +8,7 @@ const pullDiagnostics = process.env.FAKE_PULL_DIAGNOSTICS === "1";
 const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
 const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
+const navigation = process.env.FAKE_NAVIGATION === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
 
@@ -104,6 +105,10 @@ function handle(message) {
 		}
 		if (documentSymbols) capabilities.documentSymbolProvider = true;
 		if (workspaceSymbols) capabilities.workspaceSymbolProvider = true;
+		if (navigation) {
+			capabilities.definitionProvider = true;
+			capabilities.referencesProvider = true;
+		}
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
@@ -135,6 +140,32 @@ function handle(message) {
 		const result = unchanged
 			? { kind: "unchanged", resultId }
 			: { kind: "full", resultId, items: diagnosticsFor(text) };
+		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/definition" && navigation) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri, text } = documents.get(message.params.textDocument.uri) ?? {};
+		const line = message.params.position?.line;
+		if (text === undefined || !Number.isInteger(line) || line < 0 || line >= text.split("\n").length) {
+			send({ jsonrpc: "2.0", id: message.id, result: null });
+			return;
+		}
+		const position = message.params.position;
+		const character = Number.isInteger(position.character) && position.character >= 0 ? position.character : 0;
+		const point = { line, character };
+		send({ jsonrpc: "2.0", id: message.id, result: { uri, range: { start: point, end: point } } });
+	} else if (message.method === "textDocument/references" && navigation) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri, text } = documents.get(message.params.textDocument.uri) ?? {};
+		const line = message.params.position?.line;
+		if (text === undefined || !Number.isInteger(line) || line < 0 || line >= text.split("\n").length) {
+			send({ jsonrpc: "2.0", id: message.id, result: [] });
+			return;
+		}
+		const lines = text.split("\n");
+		const result = lines.map((content, index) => ({
+			uri,
+			range: { start: { line: index, character: 0 }, end: { line: index, character: content.length } },
+		}));
 		send({ jsonrpc: "2.0", id: message.id, result });
 	} else if (message.method === "textDocument/documentSymbol" && documentSymbols) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
