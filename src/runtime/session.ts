@@ -235,6 +235,21 @@ export class RuntimeSession {
 			.sort((a, b) => a.uri.localeCompare(b.uri) || a.serverId.localeCompare(b.serverId));
 	}
 
+	async documentSymbols(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; symbols: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.documentSymbolProvider) return { outcome: "unsupported", symbols: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", symbols: [] };
+			const response = await client.request<unknown>("textDocument/documentSymbol", { textDocument: { uri } }, timeoutMs);
+			if (!response.ok || !response.value || typeof response.value !== "object") return { outcome: "failed", symbols: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", symbols: [] };
+			return { outcome: "ok", symbols: response.value.slice(0, 1000) };
+		} catch {
+			return { outcome: "failed", symbols: [] };
+		}
+	}
+
 	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "full" | "unchanged"> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]

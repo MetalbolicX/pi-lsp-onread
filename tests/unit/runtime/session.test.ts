@@ -198,6 +198,91 @@ describe("RuntimeSession", () => {
 		} finally { await session.dispose(); }
 	});
 
+	it("returns document symbols from a valid array response and passes the request params", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const symbols = [{ name: "alpha", kind: 12 }, { name: "beta", kind: 13 }];
+		let requestArgs: unknown[] = [];
+		const client = {
+			capabilities: () => ({ documentSymbolProvider: true }),
+			request: async (...args: unknown[]) => { requestArgs = args; return { ok: true, value: symbols }; },
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.documentSymbols("fake", "file:///symbols.ts", 1234, client)).toEqual({ outcome: "ok", symbols });
+			expect(requestArgs).toEqual([
+				"textDocument/documentSymbol",
+				{ textDocument: { uri: "file:///symbols.ts" } },
+				1234,
+			]);
+		} finally { await session.dispose(); }
+	});
+
+	it("caps document symbols at 1000 entries", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const symbols = Array.from({ length: 1001 }, (_, index) => ({ name: `symbol-${index}` }));
+		const client = {
+			capabilities: () => ({ documentSymbolProvider: true }),
+			request: async () => ({ ok: true, value: symbols }),
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			const result = await session.documentSymbols("fake", "file:///symbols.ts", 1000, client);
+			expect(result.outcome).toBe("ok");
+			expect(result.symbols).toHaveLength(1000);
+			expect(result.symbols[999]).toEqual(symbols[999]);
+		} finally { await session.dispose(); }
+	});
+
+	it("returns unsupported when document symbols are unavailable or no client resolves", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const client = {
+			capabilities: () => ({}),
+			request: async () => ({ ok: true, value: [] }),
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.documentSymbols("fake", "file:///symbols.ts", 1000, client)).toEqual({ outcome: "unsupported", symbols: [] });
+			expect(await session.documentSymbols("missing", "file:///symbols.ts")).toEqual({ outcome: "unsupported", symbols: [] });
+		} finally { await session.dispose(); }
+	});
+
+	it.each([
+		["request errors", async () => { throw new Error("request failed"); }],
+		["request times out", async () => { throw new Error("Request timed out"); }],
+		["request returns not-ok", async () => ({ ok: false })],
+		["response value is not an array", async () => ({ ok: true, value: { symbols: [] } })],
+		["response value is missing", async () => ({ ok: true })],
+	])("returns failed when document-symbol %s", async (_label, response) => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const client = {
+			capabilities: () => ({ documentSymbolProvider: true }),
+			request: response,
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.documentSymbols("fake", "file:///symbols.ts", 1000, client)).toEqual({ outcome: "failed", symbols: [] });
+		} finally { await session.dispose(); }
+	});
+
+	it("returns failed for a non-positive document-symbol timeout", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		let requested = false;
+		const client = {
+			capabilities: () => ({ documentSymbolProvider: true }),
+			request: async () => { requested = true; return { ok: true, value: [] }; },
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.documentSymbols("fake", "file:///symbols.ts", 0, client)).toEqual({ outcome: "failed", symbols: [] });
+			expect(requested).toBe(false);
+		} finally { await session.dispose(); }
+	});
+
 	it("loads its trust store once and exposes deterministic pool keys", async () => {
 		const { projectRoot, trustStorePath } = await setup();
 		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
