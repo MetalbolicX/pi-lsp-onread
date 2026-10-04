@@ -87,20 +87,28 @@ default. No redesign of the approved retry policy.
   status --cwd=<repo> --contract=gentle-ai.review-integration/v2
   --next-transition=true --base-ref=main --committed-only=true`
 
-### T3 — Config exposure: schema, merge, validate, wiring, docs (test-first) [pending]
-- [ ] `schema/lsp.schema.json`: optional per-server lifecycle integers with
-      min/max bounds (`additionalProperties` discipline preserved)
-- [ ] `src/config/{types,merge}.ts`: fields + global→project→per-server
-      precedence; defaults preserved when omitted
-- [ ] `src/config/validate.ts`: reject invalid values (error, never clamp)
-- [ ] `src/runtime/session.ts` `defaultClientFactory` forwards configured
-      values into `ClientOptions` / session retry options
-- [ ] README + bundled schema copy updated; push/pull wording corrected to
-      push-only v1
-- [ ] Tests: merge precedence matrix, defaults, invalid-value rejection,
-      bundled-schema fixtures
-- [ ] Checks: full gate
-- Route: delegated.
+### T3 — Config exposure: schema, merge, validate, wiring, docs (test-first) [done]
+- [x] RED observed per area: missing schema properties, ignored lifecycle
+      settings during merge, invalid values accepted, configured cooldown
+      ignored by retry policy
+- [x] GREEN: schema/lsp.schema.json four bounded optional per-server
+      integers (initializeTimeoutMs 1–600000 def 15000, requestTimeoutMs
+      1–600000 def 10000, retryCooldownMs 0–86400000 def 60000,
+      maxConsecutiveStartFailures 1–100 def 3); config types + layered
+      merge (global→project→per-server, omitted keeps default); validate
+      rejects with server/field error, never clamps; session resolves
+      per-server cooldown/limit with session defaults as fallback and
+      defaultClientFactory forwards initialize/request timeouts
+- [x] README: per-server lifecycle settings section; diagnostics wording
+      corrected to push-only v1
+- [x] Checks: typecheck, lint, test (148 passing / 26 files), build,
+      git diff --check
+- Route: delegated (gentle-ai-worker).
+- Commit: `36cc79e` — feat(config): expose per-server timeout and retry
+  lifecycle settings (9 files, +143/−10)
+- Assess: medium (configuration_change), writerProfile large (runtime);
+  self-verification stands; slice 2 (a4e0ba5..36cc79e) under budget →
+  slice-close review at feature close.
 
 ## Non-goals
 
@@ -159,3 +167,8 @@ default. No redesign of the approved retry policy.
 - 2026-10-04: slice 2 opened on branch `feat/graceful-degradation-config`
   (off feat/graceful-degradation @ a4e0ba5) for T3; next reviewed boundary
   becomes the following assess base.
+- 2026-10-04: T3 complete — 36cc79e. 148 tests / 26 files; parent spot
+  check re-ran the suite and reviewed schema/validate/session/README diffs
+  (bounds consistent schema↔validate; per-server override with fallback;
+  factory forwards client timeouts). Slice 2 assess medium/under budget;
+  slice-close review on a4e0ba5..HEAD at feature close.
