@@ -81,6 +81,123 @@ describe("RuntimeSession", () => {
 			await session.dispose();
 		}
 	});
+	it("pulls workspace diagnostics for multiple documents and preserves unchanged snapshots", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig({ workspaceDiagnostics: true }), projectRoot, trustStorePath });
+		try {
+			const config = session.configResult;
+			if (!config.ok || config.config.lsp === false) throw new Error("Expected LSP config");
+			const server = config.config.lsp.fake!;
+			const result = await session.getOrCreateClient(session.getPoolKey("fake", projectRoot), {
+				serverId: "fake", server, root: projectRoot, projectRoot,
+			});
+			expect(result.ok).toBe(true);
+			if (!result.ok) throw new Error(result.message);
+			const firstUri = "file:///workspace-first.ts";
+			const secondUri = "file:///workspace-second.ts";
+			await result.client.ensure();
+			await result.client.documents.open(firstUri, "typescript", "error: first");
+			await result.client.documents.open(secondUri, "typescript", "error: second");
+			expect(await session.pullWorkspace("fake", 1000, result.client)).toBe("applied");
+			const secondSnapshot = session.diagnostics.get("fake", secondUri);
+			expect(secondSnapshot?.items[0]?.message).toBe("error: second");
+			const resultId = session.pullState.get("fake", secondUri);
+			expect(typeof resultId).toBe("string");
+			expect(await session.pullWorkspace("fake", 1000, result.client)).toBe("applied");
+			expect(session.diagnostics.get("fake", secondUri)).toBe(secondSnapshot);
+			expect(session.pullState.get("fake", secondUri)).toBe(resultId);
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("does not request a workspace pull when workspace diagnostics are unsupported", async () => {
+		const { session, client } = await sessionWithPullResponse({ items: [] });
+		let requested = false;
+		const incapable = {
+			...client,
+			capabilities: () => ({ diagnosticProvider: { workspaceDiagnostics: false } }),
+			request: async () => { requested = true; return { ok: true, value: { items: [] } }; },
+		} as unknown as LspClient;
+		try {
+			expect(await session.pullWorkspace("fake", 1000, incapable)).toBe("unsupported");
+			expect(requested).toBe(false);
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("rejects a non-array workspace items response", async () => {
+		const { session, client } = await sessionWithPullResponse({ items: {} });
+		const workspaceClient = { ...client, capabilities: () => ({ diagnosticProvider: { workspaceDiagnostics: true } }) } as unknown as LspClient;
+		try {
+			expect(await session.pullWorkspace("fake", 1000, workspaceClient)).toBe("failed");
+		} finally { await session.dispose(); }
+	});
+
+	it("skips malformed workspace entries while applying valid entries individually", async () => {
+		const { session, client } = await sessionWithPullResponse({ items: [
+			{ uri: 42, kind: "full", items: [] },
+			{ uri: "file:///bad-kind.ts", kind: "partial", items: [] },
+			{ uri: "file:///missing-items.ts", kind: "full" },
+			{ uri: "file:///missing-result.ts", kind: "unchanged" },
+			{ uri: "file:///valid.ts", kind: "full", resultId: "valid-id", items: [] },
+			{ uri: "file:///also-valid.ts", kind: "unchanged", resultId: "next-id" },
+		] });
+		const workspaceClient = { ...client, capabilities: () => ({ diagnosticProvider: { workspaceDiagnostics: true } }) } as unknown as LspClient;
+		try {
+			const unchangedSnapshot = { serverId: "fake", uri: "file:///also-valid.ts", version: null, receivedAt: 1, items: [] };
+			session.diagnostics.record(unchangedSnapshot);
+			session.pullState.set("fake", "file:///also-valid.ts", "old-id");
+			session.pullState.set("fake", "file:///missing-result.ts", "old");
+			expect(await session.pullWorkspace("fake", 1000, workspaceClient)).toBe("applied");
+			expect(session.diagnostics.has("fake", "file:///valid.ts")).toBe(true);
+			expect(session.pullState.get("fake", "file:///valid.ts")).toBe("valid-id");
+			expect(session.pullState.get("fake", "file:///also-valid.ts")).toBe("next-id");
+			expect(session.diagnostics.get("fake", "file:///also-valid.ts")).toBe(unchangedSnapshot);
+			expect(session.pullState.get("fake", "file:///missing-result.ts")).toBe("old");
+			expect(session.diagnostics.entries().some((snapshot) => snapshot.uri === "file:///bad-kind.ts")).toBe(false);
+		} finally { await session.dispose(); }
+	});
+
+	it("returns failed without throwing when a workspace pull times out", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const config = fakeConfig({ workspaceDiagnostics: true });
+		if (config.lsp === false) throw new Error("Expected LSP config");
+		config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_HANG_METHOD: "workspace/diagnostic" };
+		const session = await RuntimeSession.create({ config, projectRoot, trustStorePath });
+		try {
+			const server = session.configResult.ok && session.configResult.config.lsp !== false ? session.configResult.config.lsp.fake! : undefined;
+			if (!server) throw new Error("Expected fake server configuration");
+			const result = await session.getOrCreateClient(session.getPoolKey("fake", projectRoot), { serverId: "fake", server, root: projectRoot, projectRoot });
+			if (!result.ok) throw new Error(result.message);
+			await result.client.ensure();
+			const started = Date.now();
+			expect(await session.pullWorkspace("fake", 30, result.client)).toBe("failed");
+			expect(Date.now() - started).toBeLessThan(1000);
+		} finally { await session.dispose(); }
+	});
+
+	it("returns changed snapshots at or after the timestamp in uri then server order", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		let now = 10;
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath, clock: () => now });
+		const makeSnapshot = (serverId: string, uri: string) => ({ serverId, uri, version: null, receivedAt: now, items: [] });
+		try {
+			session.diagnostics.record(makeSnapshot("zeta", "file:///b.ts"));
+			now = 20;
+			session.diagnostics.record(makeSnapshot("alpha", "file:///a.ts"));
+			session.diagnostics.record(makeSnapshot("beta", "file:///a.ts"));
+			const before = session.diagnostics.entries();
+			const changed = session.changedSince(20);
+			expect(changed).toEqual([
+				{ serverId: "alpha", uri: "file:///a.ts", receivedAt: 20 },
+				{ serverId: "beta", uri: "file:///a.ts", receivedAt: 20 },
+			]);
+			expect(session.diagnostics.entries()).toEqual(before);
+		} finally { await session.dispose(); }
+	});
+
 	it("loads its trust store once and exposes deterministic pool keys", async () => {
 		const { projectRoot, trustStorePath } = await setup();
 		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });

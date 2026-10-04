@@ -20,6 +20,19 @@ describe("diagnostics store", () => {
 		expect(store.has("other", "file:///a.ts")).toBe(false);
 	});
 
+	it("enumerates current snapshots without exposing mutable store state", () => {
+		const store = new DiagnosticsStore();
+		const first = snapshot(1, "first");
+		const second = { ...snapshot(1, "second"), uri: "file:///b.ts" };
+		store.record(first);
+		store.record(second);
+
+		const entries = store.entries();
+		expect(entries).toEqual([first, second]);
+		entries.pop();
+		expect(store.entries()).toEqual([first, second]);
+	});
+
 	it("has no baseline after the first accepted snapshot", () => {
 		const store = new DiagnosticsStore();
 		const first = snapshot(1, "first");

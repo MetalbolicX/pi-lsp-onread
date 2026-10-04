@@ -183,6 +183,58 @@ export class RuntimeSession {
 		return { promise, cancel: () => this.pendingSnapshots.delete(waiter) };
 	}
 
+	async pullWorkspace(serverId: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "applied"> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const diagnosticProvider = client?.capabilities()?.diagnosticProvider as { workspaceDiagnostics?: unknown } | undefined;
+			if (!client || diagnosticProvider?.workspaceDiagnostics !== true) return "unsupported";
+			if (timeoutMs <= 0) return "failed";
+			const previousResultIds: Record<string, string> = {};
+			for (const snapshot of this.diagnostics.entries()) {
+				if (snapshot.serverId !== serverId) continue;
+				const resultId = this.pullState.get(serverId, snapshot.uri);
+				if (resultId !== undefined) previousResultIds[snapshot.uri] = resultId;
+			}
+			const response = await client.request<unknown>("workspace/diagnostic", { previousResultIds }, timeoutMs);
+			if (!response.ok || !response.value || typeof response.value !== "object") return "failed";
+			const items = (response.value as { items?: unknown }).items;
+			if (!Array.isArray(items)) return "failed";
+			for (const value of items) {
+				if (!value || typeof value !== "object") continue;
+				const report = value as { uri?: unknown; kind?: unknown; resultId?: unknown; items?: unknown };
+				if (typeof report.uri !== "string" || (report.kind !== "full" && report.kind !== "unchanged")) continue;
+				if (report.resultId !== undefined && typeof report.resultId !== "string") continue;
+				if (report.items !== undefined && !Array.isArray(report.items)) continue;
+				if (report.kind === "unchanged") {
+					if (typeof report.resultId !== "string") continue;
+					this.pullState.set(serverId, report.uri, report.resultId);
+					continue;
+				}
+				if (!Array.isArray(report.items)) continue;
+				if (typeof report.resultId === "string") this.pullState.set(serverId, report.uri, report.resultId);
+				this.diagnostics.record({
+					serverId,
+					uri: report.uri,
+					version: client.documents.version(report.uri) ?? null,
+					receivedAt: this.clock(),
+					items: report.items.map(toDiagnosticItem).filter((item): item is DiagnosticItem => item !== undefined),
+				});
+			}
+			return "applied";
+		} catch {
+			// Workspace pulls are opportunistic; preserve push-based behavior on failure.
+			return "failed";
+		}
+	}
+
+	changedSince(timestamp: number): { serverId: string; uri: string; receivedAt: number }[] {
+		return this.diagnostics.entries()
+			.filter((snapshot) => snapshot.receivedAt >= timestamp)
+			.map(({ serverId, uri, receivedAt }) => ({ serverId, uri, receivedAt }))
+			.sort((a, b) => a.uri.localeCompare(b.uri) || a.serverId.localeCompare(b.serverId));
+	}
+
 	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "full" | "unchanged"> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]

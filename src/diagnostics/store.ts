@@ -25,6 +25,10 @@ export class DiagnosticsStore {
 		return this.snapshots.has(this.key(serverId, uri));
 	}
 
+	entries(): Snapshot[] {
+		return [...this.snapshots.values()];
+	}
+
 	private key(serverId: string, uri: string): string {
 		return JSON.stringify([serverId, uri]);
 	}
