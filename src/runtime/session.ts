@@ -183,21 +183,23 @@ export class RuntimeSession {
 		return { promise, cancel: () => this.pendingSnapshots.delete(waiter) };
 	}
 
-	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<void> {
+	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "full" | "unchanged"> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]
 				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
-			if (!client || client.capabilities()?.diagnosticProvider === undefined || timeoutMs <= 0) return;
+			if (!client || client.capabilities()?.diagnosticProvider === undefined) return "unsupported";
+			if (timeoutMs <= 0) return "failed";
 			const previousResultId = this.pullState.get(serverId, uri);
 			const params = {
 				textDocument: { uri },
 				...(previousResultId === undefined ? {} : { previousResultId }),
 			};
 			const response = await client.request<unknown>("textDocument/diagnostic", params, timeoutMs);
-			if (!response.ok || !response.value || typeof response.value !== "object") return;
+			if (!response.ok || !response.value || typeof response.value !== "object") return "failed";
 			const report = response.value as { kind?: unknown; resultId?: unknown; items?: unknown };
+			if (report.kind !== "full" && report.kind !== "unchanged") return "failed";
 			if (typeof report.resultId === "string") this.pullState.set(serverId, uri, report.resultId);
-			if (report.kind !== "full") return;
+			if (report.kind === "unchanged") return "unchanged";
 			const version = client.documents.version(uri) ?? null;
 			this.diagnostics.record({
 				serverId,
@@ -206,8 +208,10 @@ export class RuntimeSession {
 				receivedAt: this.clock(),
 				items: Array.isArray(report.items) ? report.items.map(toDiagnosticItem).filter((item): item is DiagnosticItem => item !== undefined) : [],
 			});
+			return "full";
 		} catch {
 			// Pulls are opportunistic; preserve the existing push-based behavior on failure.
+			return "failed";
 		}
 	}
 

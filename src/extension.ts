@@ -3,6 +3,7 @@ import { buildEffectiveConfig } from "./config/index.js";
 import { activate } from "./runtime/activation.js";
 import { RuntimeSession } from "./runtime/session.js";
 import { createHookBindings } from "./pi/hooks.js";
+import { registerLspDiagnosticsTool } from "./pi/lsp-diagnostics-tool.js";
 
 type SessionFactory = (projectRoot: string) => Promise<RuntimeSession>;
 
@@ -27,6 +28,7 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 			return sessionPromise;
 		};
 		const logError = options.logError ?? ((message, error) => console.warn(message, error));
+		if (typeof pi.registerTool === "function") registerLspDiagnosticsTool(pi, getSession);
 		createHookBindings(pi, {
 			activate: async (absoluteFilePath, event, projectRoot) => {
 				if (disposed) return undefined;

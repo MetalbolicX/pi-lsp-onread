@@ -101,6 +101,18 @@ describe("runtime activation", () => {
 		expect(session.pullState.get("fake", uri)).toBeUndefined();
 	}, timeout);
 
+	it("surfaces a hanging pull as failed without throwing", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000, pullDiagnostics: true });
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_HANG_METHOD: "textDocument/diagnostic" };
+		const activated = await activate(session, filePath, "read");
+		if (activated.kind !== "ok") throw new Error("Expected activation success");
+		const client = session.pool.get(session.getPoolKey("fake", session.projectRoot));
+		if (!client) throw new Error("Expected pooled fake client");
+		expect(await session.pullFresh("fake", new URL(`file://${filePath}`).href, 100, client)).toBe("failed");
+	}, timeout);
+
 	it("silently degrades when a pull hangs and stays within the edit deadline", async () => {
 		const { filePath, session } = await setup({ waitMs: 250, pullDiagnostics: true });
 		const config = session.configResult;
