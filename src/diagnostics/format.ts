@@ -1,6 +1,6 @@
 import { freshnessOf } from "./store.js";
 import { itemLine } from "./policy.js";
-import type { PolicyResults } from "./types.js";
+import type { PolicyItem, PolicyResults } from "./types.js";
 
 export interface FormatInput {
 	uri: string;
@@ -10,6 +10,12 @@ export interface FormatInput {
 export interface EditFormatInput extends FormatInput {
 	waited: boolean;
 	waitedMs: number;
+	delta?: {
+		serverId: string;
+		newlyObserved: PolicyItem[];
+		resolved: PolicyItem[];
+		unchangedCount: number;
+	};
 }
 
 export function formatForRead(input: FormatInput): string {
@@ -20,10 +26,10 @@ export function formatForEdit(input: EditFormatInput): string {
 	const waitLine = input.waited
 		? `waited ${input.waitedMs}ms; freshest available attached`
 		: "wait budget exhausted; freshest available attached";
-	return `${format(input)}\n${waitLine}`;
+	return `${format(input, input.delta)}\n${waitLine}`;
 }
 
-function format(input: FormatInput): string {
+function format(input: FormatInput, delta?: EditFormatInput["delta"]): string {
 	const lines = [`Diagnostics for ${fileName(input.uri)}:`];
 	for (const result of input.results.snapshots) {
 		if (!result.snapshot) {
@@ -41,17 +47,29 @@ function format(input: FormatInput): string {
 		}
 	}
 
-	for (const item of input.results.items) lines.push(itemLine(item, item.serverId));
-	if (input.results.truncationMarker) lines.push(input.results.truncationMarker);
-	if (input.results.items.length === 0 && input.results.snapshots.every((result) => result.snapshot?.items.length === 0)) {
-		lines.push("no diagnostics received to report from the available snapshots");
-	} else if (input.results.items.length === 0 && input.results.snapshots.length === 0) {
-		lines.push("no diagnostics received from matched servers");
+	if (delta) {
+		lines.push(`Delta since previous snapshot: ${delta.newlyObserved.length} newly observed, ${delta.resolved.length} resolved, ${delta.unchangedCount} unchanged.`);
+		lines.push("Newly observed since previous snapshot:");
+		for (const item of delta.newlyObserved) lines.push(itemLine(item, delta.serverId));
+		lines.push("Resolved since previous snapshot:");
+		for (const item of delta.resolved) lines.push(`- ${truncateMessage(item.message)}`);
+	} else {
+		for (const item of input.results.items) lines.push(itemLine(item, item.serverId));
+		if (input.results.items.length === 0 && input.results.snapshots.every((result) => result.snapshot?.items.length === 0)) {
+			lines.push("no diagnostics received to report from the available snapshots");
+		} else if (input.results.items.length === 0 && input.results.snapshots.length === 0) {
+			lines.push("no diagnostics received from matched servers");
+		}
 	}
+	if (input.results.truncationMarker) lines.push(input.results.truncationMarker);
 	if (input.results.dropped.items > 0 || input.results.dropped.characters > 0) {
 		lines.push(`Dropped ${input.results.dropped.items} items (${input.results.dropped.characters} characters).`);
 	}
 	return lines.join("\n");
+}
+
+function truncateMessage(message: string): string {
+	return message.length > 120 ? `${message.slice(0, 119)}…` : message;
 }
 
 function fileName(uri: string): string {

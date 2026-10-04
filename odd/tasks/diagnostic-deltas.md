@@ -32,7 +32,7 @@ Strict TDD is mandatory for T1–T4: observe RED (failing test) before implement
 | ID | Task | Route | Checks | Status |
 | --- | --- | --- | --- | --- |
 | T1 | Store retains previous snapshot as baseline on overwrite | delegated: gentle-ai-worker | RED/GREEN on `tests/unit/diagnostics/store.test.ts` | done |
-| T2 | Delta computation module (newly observed / resolved / unchanged) | delegated: gentle-ai-worker | RED/GREEN on new `tests/unit/diagnostics/delta.test.ts` | pending |
+| T2 | Delta computation module (newly observed / resolved / unchanged) | delegated: gentle-ai-worker | RED/GREEN on new `tests/unit/diagnostics/delta.test.ts` | done |
 | T3 | Delta-aware `formatForEdit` with non-causal wording + caps | delegated: gentle-ai-worker | RED/GREEN on `tests/unit/diagnostics/format.test.ts` | pending |
 | T4 | Activation wires delta into edit/write path; read path unchanged; no-baseline fallback | delegated: gentle-ai-worker | RED/GREEN on `tests/unit/runtime/activation.test.ts` | pending |
 | T5 | README diagnostics section documents delta output | inline (single mechanical file) | structural readback | pending |
@@ -54,6 +54,7 @@ Strict TDD is mandatory for T1–T4: observe RED (failing test) before implement
 | Task | Commit | Notes |
 | --- | --- | --- |
 | T1 | 8abb578 | 6 tests RED→GREEN; focused 8/8; typecheck clean; parent spot check green |
+| T2 | 5895e8b | 13 tests RED→GREEN; focused 13/13; typecheck clean; parent spot check green |
 
 ## Route evidence
 
