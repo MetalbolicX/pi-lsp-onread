@@ -35,8 +35,8 @@ Strict TDD mandatory for F1/F3/F4 (product behavior, deterministic tests). F2 is
 | F2 | Fixture pull support (env-gated) + helper flag | delegated: gentle-ai-worker | structural + exercised by F3/F4 | done |
 | F3 | Session/activation pull flow: resultId state, full/unchanged, edit-path bounded pull | delegated: gentle-ai-worker | RED/GREEN `tests/unit/runtime/*` | done |
 | F4 | `lsp_diagnostics` registered tool, trust-gated, coverage wording | delegated: gentle-ai-worker | RED/GREEEN new `tests/unit/pi/lsp-diagnostics-tool.test.ts` | done |
-| F5 | README documents pull + tool | inline | structural readback | pending |
-| F6 | Full-suite close + assess + native review | inline + native | all green | pending |
+| F5 | README documents pull + tool | inline | structural readback | done |
+| F6 | Full-suite close + assess + native review | inline + native | all green; approved + acknowledged | done |
 
 ## Verification commands
 
@@ -54,6 +54,17 @@ Strict TDD mandatory for F1/F3/F4 (product behavior, deterministic tests). F2 is
 | F2 | 989dcf8 | test infra; protocol smoke + structural check; defaults unchanged |
 | F3 | 1cb2545 | RED→GREEN; runtime 46/46, diagnostics 29/29, typecheck clean; session API: pullFresh(serverId, uri, timeoutMs?, client?) |
 | F4 | 4c6d05b | RED→GREEN incl. truthfulness round: pullFresh returns unsupported/failed/full/unchanged; hung pull with prior resultId can no longer masquerade as unchanged; pi 12/12, runtime 47/47 |
+| F5 | e4bf891 | README: pull diagnostics + tool contract; structural readback |
+| F6 | — | 190/190 tests, oxlint clean, tsc clean, build clean; assess medium (510 lines vs feature/diagnostic-deltas base) |
+
+## Review record
+
+- Native assessment: medium risk (executable change, 1118 total changed lines vs origin base).
+- Native review lineage `review-9408e493b0e3aacd`: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational findings (separate later work):
+  - R3-001 — `src/diagnostics/format.ts:52` (WARNING, informational)
+  - R3-002 — `src/runtime/session.ts:209` (WARNING, informational)
+- Process note: one capture resubmission was rejected (`capture-binding-rejected`) because the parent corrupted a field while re-serializing the binding; resolved by fresh bound STATUS reoffering the same slot and submitting the exact verbatim binding. Lesson: never reassemble provider bindings by hand.
 
 ## Route evidence
 
