@@ -37,7 +37,9 @@ Non-blocking; never auto-apply; never imply completeness or freshness; explicit 
 | W3 | `4f2b015` | feat(symbols): add bounded workspace symbol formatting |
 | W4 | `97506cc` | feat(tools): add lsp_workspace_symbols tool |
 | W5 | `20aea5e` | docs: document lsp_workspace_symbols tool |
-| W6 | _pending_ | closure + review record |
+| W6 | `c4abc43` | docs: record workspace-symbol-search closure evidence |
+
+Review-record commit: follows as `docs: record workspace-symbol-search review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (W6)
 
@@ -47,7 +49,11 @@ Non-blocking; never auto-apply; never imply completeness or freshness; explicit 
 
 ## Review record
 
-- _pending at close (W6)._
+- ASSESS (committed range, base `21a14fb`, committedOnly): medium risk, executable change (`src/extension.ts`), 11 paths / 495 lines, reviewDue = `slice_budget_reached`; plan = writerSelfVerification (no separate verifier required; full independent verification battery had already run).
+- First START created lineage `review-3193eaef5d555ca8` directly (no stale consent binding this time), host resolved consent; medium tier, review-reliability lens.
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-001 — `src/runtime/session.ts:215` (WARNING)
 
 ## Route evidence
 
