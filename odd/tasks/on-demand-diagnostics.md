@@ -59,6 +59,8 @@ Strict TDD mandatory for F1/F3/F4 (product behavior, deterministic tests). F2 is
 
 ## Review record
 
+- ADVISORY RESOLVED: R3-001 `src/runtime/session.ts:209` fixed in b3776b7 (malformed pull reports rejected before state updates; strict TDD).
+
 - Native assessment: medium risk (executable change, 1118 total changed lines vs origin base).
 - Native review lineage `review-9408e493b0e3aacd`: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
 - Non-blocking informational findings (separate later work):
