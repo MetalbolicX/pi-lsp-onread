@@ -185,3 +185,24 @@ follows ordinary repository policy; merge/push/PR remain user decisions.
 Open follow-ups: informational advisory R3-001 (activation.ts:81, slice
 1, non-blocking); publishing prep (remote/push) is a separate user
 decision.
+
+## Post-merge follow-ups
+- 2026-10-04: merged to main via `--ff-only` (slice 1 then slice 2);
+  both feature branches deleted. main @ d1dd767.
+- 2026-10-04: R3-001 fixed — 76dc220 on main: publication waiter moved
+  inside the try (registered only after successful sync) and the failure
+  message renamed to "failed to sync document to". The connection-drop
+  window is not deterministically reproducible with the stdio fixture
+  server (pipe writes buffer before teardown events arrive; 0/10 across
+  four fixture exit modes), so the defensive catch carries an explanatory
+  comment instead of a flaky test. Suite stays 148 green; typecheck/lint
+  clean.
+- 2026-10-04: fresh review of the unreviewed delta a4e0ba5..76dc220 —
+  lineage review-d91056a328c68875, medium tier (config change),
+  review-reliability lens, 11 files / 229 lines, correction budget 115.
+  APPROVED, acknowledgement burned (consumed revision sha256:9fda69af…).
+  Findings: only R3-001 re-flagged informational at activation.ts:81
+  (now the fixed sync block; reviewer prose not preserved — plausibly the
+  deliberately untested defensive path). Crucially: zero findings in
+  src/runtime/session.ts, superseding the request-timeout review's
+  session.ts:137 advisory by fresh evidence.
