@@ -119,9 +119,12 @@ default. No redesign of the approved retry policy.
 - Per-task work-unit commit (Conventional Commit) with commit identity
   recorded here; ~400 authored changed lines per task is an advisory
   heuristic only, never a forced split.
-- Delivery strategy: ask-on-risk (forecast ~450–650 authored lines total).
-- RDD: assess per work-unit commit; native review at close per the mirrored
-  contract.
+- Delivery strategy: ask-on-risk chosen at plan time; budget crossed after
+  T2 (531 lines over main) → user selected **feature-branch-chain**
+  (chain_strategy=feature-branch-chain, cached). Slice 1 = main..0e3f439
+  (T1+T2, housekeeping incl.). T3 opens slice 2 on its own branch.
+- RDD: assess per work-unit commit; native review at slice close per the
+  mirrored contract.
 - Merge/push/PR remain user decisions.
 
 ## Progress log
@@ -145,3 +148,5 @@ default. No redesign of the approved retry policy.
   medium/large-writer → self-verification stands; reviewDue true
   (slice_budget_reached, 531 lines) → delivery menu + slice-close review
   before T3.
+- 2026-10-04: delivery menu answered — feature-branch-chain. Slice-close
+  native review started on slice 1 (main..HEAD).
