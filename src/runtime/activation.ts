@@ -73,14 +73,21 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 			session.recordStartSuccess(poolKey, client);
 			const version = client.documents.version(uri);
 			const nextVersion = version === undefined ? 1 : version + (event === "edit" ? 1 : 0);
-			const ticket = event === "edit" ? session.watchPublication(match.serverId, uri, nextVersion) : undefined;
-			if (ticket) waiters.push(ticket);
 			try {
 				if (version === undefined) await client.documents.open(uri, match.languageId, text);
 				else if (event === "edit") await client.documents.change(uri, text);
 				session.documentState.set(`${match.serverId}::${uri}`, { languageId: match.languageId, text });
+				if (event === "edit") {
+					const ticket = session.watchPublication(match.serverId, uri, nextVersion);
+					waiters.push(ticket);
+				}
 			} catch (error) {
-				failures.push(`failed to start ${match.serverId}: ${error instanceof Error ? error.message : String(error)}`);
+				// Defensive: a connection drop between ensure() and the document sync can leave the
+			// server unresponsive. Not deterministically reproducible with the stdio fixture
+			// server (pipe writes buffer before the teardown event arrives), so intentionally
+			// not covered by a focused test. Message names the sync, not the start, and no
+			// publication waiter is registered here (waiter moved inside the try on success).
+			failures.push(`failed to sync document to ${match.serverId}: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		}
 		if (event === "edit" && waitMs > 0 && waiters.length > 0) {
