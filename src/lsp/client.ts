@@ -5,6 +5,8 @@ import { terminateServer } from "./transport.js";
 
 export type ClientState = "starting" | "ready" | "failed" | "disposed";
 
+export type ServerCapabilities = Record<string, unknown>;
+
 export interface ClientOptions {
 	serverId: string;
 	rootUri: string;
@@ -45,6 +47,7 @@ export class LspClient {
 	private readonly connection;
 	private initialization: Promise<ClientResult> | undefined;
 	private failure: Error | undefined;
+	private serverCapabilities: ServerCapabilities | undefined;
 	private disposal: Promise<void> | undefined;
 	private readonly listeners = new Set<(event: PublishedDiagnostics) => void>();
 	private readonly failureListeners = new Set<(error: Error) => void>();
@@ -83,6 +86,10 @@ export class LspClient {
 	onPublishDiagnostics(listener: (event: PublishedDiagnostics) => void): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
+	}
+
+	capabilities(): ServerCapabilities | undefined {
+		return this.serverCapabilities;
 	}
 
 	onFailure(listener: (error: Error) => void): () => void {
@@ -152,15 +159,19 @@ export class LspClient {
 	}
 
 	private async initialize(): Promise<ClientResult> {
-		const result = await this.request<{ capabilities?: Record<string, unknown> }>("initialize", {
+		const result = await this.request<{ capabilities?: ServerCapabilities }>("initialize", {
 			processId: process.pid,
 			rootUri: this.options.rootUri,
 			capabilities: {
-				textDocument: { synchronization: { dynamicRegistration: false, willSave: false, didSave: false } },
+				textDocument: {
+					synchronization: { dynamicRegistration: false, willSave: false, didSave: false },
+					diagnostic: {},
+				},
 			},
 			initializationOptions: this.options.initializationOptions ?? null,
 		}, this.options.initializeTimeoutMs ?? 15_000);
 		if (!result.ok) return this.failedInitialization(result);
+		this.serverCapabilities = result.value?.capabilities;
 		if (this.isDisposed()) return this.failedInitialization({ ok: false, error: { kind: "disposed", message: "LSP client is disposed" } });
 		const initialized = await this.notify("initialized", {});
 		if (!initialized.ok) return this.failedInitialization(initialized);

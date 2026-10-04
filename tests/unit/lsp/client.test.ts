@@ -43,6 +43,48 @@ afterEach(async () => {
 });
 
 describe("LSP client", () => {
+	it("advertises pull diagnostics and retains server capabilities", async () => {
+		const server = `
+			let input = "";
+			process.stdin.setEncoding("utf8");
+			process.stdin.on("data", chunk => {
+					input += chunk;
+					while (true) {
+						const boundary = input.indexOf("\\r\\n\\r\\n");
+						if (boundary < 0) return;
+						const length = Number(input.slice(0, boundary).match(/Content-Length: (\\d+)/i)?.[1]);
+						if (input.length < boundary + 4 + length) return;
+						const message = JSON.parse(input.slice(boundary + 4, boundary + 4 + length));
+						input = input.slice(boundary + 4 + length);
+						if (message.method === "initialize") {
+							const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { capabilities: {
+								textDocumentSync: 1,
+							experimental: { receivedDiagnosticCapability: !!message.params.capabilities.textDocument.diagnostic },
+							} } }));
+							process.stdout.write("Content-Length: " + body.length + "\\r\\n\\r\\n");
+							process.stdout.write(body);
+						} else if (message.method === "shutdown") {
+							const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: null }));
+							process.stdout.write("Content-Length: " + body.length + "\\r\\n\\r\\n");
+							process.stdout.write(body);
+						} else if (message.method === "exit") process.exit(0);
+					}
+				});
+		`;
+		const spawned = await spawnServer({ command: [process.execPath, "-e", server], cwd, env: {} });
+		expect(spawned.ok).toBe(true);
+		if (!spawned.ok) throw new Error(spawned.error.message);
+		children.push(spawned.child);
+		const client = new LspClient(spawned.child, { serverId: "fake", rootUri: "file:///workspace/project" });
+		clients.push(client);
+
+		expect((await client.ensure()).ok).toBe(true);
+		expect(client.capabilities()).toEqual({
+			textDocumentSync: 1,
+			experimental: { receivedDiagnosticCapability: true },
+		});
+	}, timeout);
+
 	it("probes the protocol default for an unhandled server request", async () => {
 		const client = await createClient({ FAKE_SERVER_REQUESTS: "1" });
 		const received = nextDiagnostics(client);
