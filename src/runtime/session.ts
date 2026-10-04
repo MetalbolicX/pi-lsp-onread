@@ -198,15 +198,20 @@ export class RuntimeSession {
 			if (!response.ok || !response.value || typeof response.value !== "object") return "failed";
 			const report = response.value as { kind?: unknown; resultId?: unknown; items?: unknown };
 			if (report.kind !== "full" && report.kind !== "unchanged") return "failed";
+			if (report.kind === "unchanged") {
+				if (typeof report.resultId !== "string") return "failed";
+				this.pullState.set(serverId, uri, report.resultId);
+				return "unchanged";
+			}
+			if (!Array.isArray(report.items)) return "failed";
 			if (typeof report.resultId === "string") this.pullState.set(serverId, uri, report.resultId);
-			if (report.kind === "unchanged") return "unchanged";
 			const version = client.documents.version(uri) ?? null;
 			this.diagnostics.record({
 				serverId,
 				uri,
 				version,
 				receivedAt: this.clock(),
-				items: Array.isArray(report.items) ? report.items.map(toDiagnosticItem).filter((item): item is DiagnosticItem => item !== undefined) : [],
+				items: report.items.map(toDiagnosticItem).filter((item): item is DiagnosticItem => item !== undefined),
 			});
 			return "full";
 		} catch {
