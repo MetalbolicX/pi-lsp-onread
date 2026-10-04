@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { EffectiveConfig, EffectiveServerConfig } from "../config/types.js";
 import { DiagnosticsStore } from "../diagnostics/store.js";
-import type { Snapshot } from "../diagnostics/types.js";
+import { PullState } from "../diagnostics/pull-state.js";
+import type { DiagnosticItem, Snapshot } from "../diagnostics/types.js";
 import { LspClient } from "../lsp/client.js";
 import { spawnServer } from "../lsp/transport.js";
 import { loadTrustStore, defaultTrustStorePath, type LoadTrustStoreResult } from "./trust-store.js";
@@ -53,6 +54,7 @@ export class RuntimeSession {
 	readonly projectRoot: string;
 	readonly trustResult: LoadTrustStoreResult;
 	readonly diagnostics = new DiagnosticsStore();
+	readonly pullState = new PullState();
 	readonly documentState = new Map<string, { languageId: string; text: string }>();
 	readonly pool = new Map<string, LspClient>();
 	readonly pendingClients = new Map<string, Promise<ClientFactoryResult>>();
@@ -181,6 +183,34 @@ export class RuntimeSession {
 		return { promise, cancel: () => this.pendingSnapshots.delete(waiter) };
 	}
 
+	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<void> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || client.capabilities()?.diagnosticProvider === undefined || timeoutMs <= 0) return;
+			const previousResultId = this.pullState.get(serverId, uri);
+			const params = {
+				textDocument: { uri },
+				...(previousResultId === undefined ? {} : { previousResultId }),
+			};
+			const response = await client.request<unknown>("textDocument/diagnostic", params, timeoutMs);
+			if (!response.ok || !response.value || typeof response.value !== "object") return;
+			const report = response.value as { kind?: unknown; resultId?: unknown; items?: unknown };
+			if (typeof report.resultId === "string") this.pullState.set(serverId, uri, report.resultId);
+			if (report.kind !== "full") return;
+			const version = client.documents.version(uri) ?? null;
+			this.diagnostics.record({
+				serverId,
+				uri,
+				version,
+				receivedAt: this.clock(),
+				items: Array.isArray(report.items) ? report.items.map(toDiagnosticItem).filter((item): item is DiagnosticItem => item !== undefined) : [],
+			});
+		} catch {
+			// Pulls are opportunistic; preserve the existing push-based behavior on failure.
+		}
+	}
+
 	attachDiagnostics(client: LspClient, key?: string, maxFailures = this.maxConsecutiveStartFailures): void {
 		if (key && typeof client.onFailure === "function") client.onFailure(() => { void this.recordStartFailure(key, client, maxFailures); });
 		client.onPublishDiagnostics((event) => {
@@ -218,6 +248,20 @@ export class RuntimeSession {
 		})();
 		return this.disposal;
 	}
+}
+
+function toDiagnosticItem(value: unknown): DiagnosticItem | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const item = value as Record<string, unknown>;
+	const range = item.range as DiagnosticItem["range"] | undefined;
+	if (!range || !range.start || !range.end || typeof item.message !== "string") return undefined;
+	return {
+		range,
+		severity: typeof item.severity === "number" ? item.severity : 1,
+		...(typeof item.code === "number" || typeof item.code === "string" ? { code: item.code } : {}),
+		...(typeof item.source === "string" ? { source: item.source } : {}),
+		message: item.message,
+	};
 }
 
 function isConfigResult(value: EffectiveConfig | ConfigResult): value is ConfigResult {

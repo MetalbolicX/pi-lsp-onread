@@ -26,6 +26,7 @@ function diagnosticsFor(text) {
 }
 
 function publish(uri, version, text) {
+	if (process.env.FAKE_SUPPRESS_PUBLISH === "1") return;
 	const diagnostics = diagnosticsFor(text);
 	const params = { uri, diagnostics };
 	if (Number.isInteger(version)) params.version = version;
@@ -91,6 +92,7 @@ function handle(message) {
 		documents.delete(message.params.textDocument.uri);
 		lastResultIds.delete(message.params.textDocument.uri);
 	} else if (message.method === "textDocument/diagnostic" && pullDiagnostics) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const { uri } = message.params.textDocument;
 		const { previousResultId } = message.params;
 		const text = documents.get(uri)?.text ?? "";

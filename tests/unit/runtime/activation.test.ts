@@ -20,7 +20,7 @@ function recordHistory(session: RuntimeSession, uri: string, serverIds: string[]
 	}
 }
 
-async function setup(options: { trusted?: boolean; delayMs?: number; waitMs?: number; command?: string[] } = {}) {
+async function setup(options: { trusted?: boolean; delayMs?: number; waitMs?: number; command?: string[]; pullDiagnostics?: boolean } = {}) {
 	const project = await createProject(options.trusted ?? true);
 	projects.push(project.projectRoot);
 	const session = await RuntimeSession.create({ config: fakeConfig(options), projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
@@ -57,6 +57,61 @@ describe("runtime activation", () => {
 		if (result.kind !== "ok") throw new Error("Expected activation success");
 		expect(result.formatted).toContain("fresh: current");
 		expect(result.formatted).toContain("waited ");
+	}, timeout);
+
+	it("pulls full diagnostics after the edit wait and renders their delta", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000, pullDiagnostics: true });
+		const uri = new URL(`file://${filePath}`).href;
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_SUPPRESS_PUBLISH: "1" };
+		session.diagnostics.record({ serverId: "fake", uri, version: 0, receivedAt: 1, items: [diagnostic("error: baseline")] });
+		session.diagnostics.record({ serverId: "fake", uri, version: 1, receivedAt: 2, items: [diagnostic("error: before pull")] });
+		await writeFile(filePath, "error: pulled only\\n");
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("error 1:1 fake-lsp: error: pulled only");
+		expect(session.pullState.get("fake", uri)).toBeTruthy();
+	}, timeout);
+
+	it("does not re-record unchanged pulls and retains the resultId", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000, pullDiagnostics: true });
+		const uri = new URL(`file://${filePath}`).href;
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_SUPPRESS_PUBLISH: "1" };
+		session.diagnostics.record({ serverId: "fake", uri, version: 0, receivedAt: 1, items: [diagnostic("error: baseline")] });
+		await activate(session, filePath, "edit");
+		const afterFull = session.diagnostics.get("fake", uri);
+		const baselineAfterFull = session.diagnostics.baseline("fake", uri);
+		expect(baselineAfterFull).toBeDefined();
+		const resultId = session.pullState.get("fake", uri);
+		await session.pullFresh("fake", uri);
+		expect(session.diagnostics.get("fake", uri)).toBe(afterFull);
+		expect(session.diagnostics.baseline("fake", uri)).toBe(baselineAfterFull);
+		expect(session.pullState.get("fake", uri)).toBe(resultId);
+	}, timeout);
+
+	it("does not send pulls to servers without diagnosticProvider", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000 });
+		const uri = new URL(`file://${filePath}`).href;
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		expect(session.pullState.get("fake", uri)).toBeUndefined();
+	}, timeout);
+
+	it("silently degrades when a pull hangs and stays within the edit deadline", async () => {
+		const { filePath, session } = await setup({ waitMs: 250, pullDiagnostics: true });
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_HANG_METHOD: "textDocument/diagnostic" };
+		const started = Date.now();
+		const result = await activate(session, filePath, "edit");
+		expect(Date.now() - started).toBeLessThan(1500);
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("Diagnostics for broken.ts:");
 	}, timeout);
 
 	it("bounds cold initialization by the shared edit budget and labels diagnostics pending", async () => {

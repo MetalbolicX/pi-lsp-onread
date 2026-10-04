@@ -98,15 +98,28 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 		}
 		if (event === "edit" && waitMs > 0 && waiters.length > 0) {
 			const remaining = Math.max(0, waitMs - (session.clock() - startedAt));
-			if (remaining > 0) {
+			const hasPullServer = outcomes.some((outcome) => "client" in outcome && outcome.client?.capabilities()?.diagnosticProvider !== undefined);
+			const pullReserveMs = hasPullServer ? Math.min(remaining, Math.max(1, Math.floor(waitMs * 0.2))) : 0;
+			const publicationBudget = Math.max(0, remaining - pullReserveMs);
+			if (publicationBudget > 0) {
 				let timer: ReturnType<typeof setTimeout> | undefined;
 				const publication = (async () => {
 					await Promise.all(waiters.map((waiter) => waiter.promise));
 					return true;
 				})();
-				const timedOut = new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), remaining); });
+				const timedOut = new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), publicationBudget); });
 				waited = await Promise.race([publication, timedOut]);
 				if (timer) clearTimeout(timer);
+			}
+		}
+		if (event === "edit") {
+			const remaining = Math.max(0, waitMs - (session.clock() - startedAt));
+			if (remaining > 0) {
+				await Promise.all(outcomes.map(async (outcome) => {
+					if (!("client" in outcome) || outcome.client?.capabilities()?.diagnosticProvider === undefined) return;
+					const budget = Math.max(0, waitMs - (session.clock() - startedAt));
+					if (budget > 0) await session.pullFresh(outcome.match.serverId, uri, budget, outcome.client);
+				}));
 			}
 		}
 		for (const waiter of waiters) waiter.cancel();
