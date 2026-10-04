@@ -47,6 +47,46 @@ describe("runtime activation", () => {
 		expect(result.formatted).toContain("waited ");
 	}, timeout);
 
+	it("bounds cold initialization by the shared edit budget and labels diagnostics pending", async () => {
+		const { filePath, session } = await setup({ waitMs: 250 });
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false) throw new Error("Expected server configuration");
+		const server = config.config.lsp.fake;
+		if (!server) throw new Error("Expected fake server");
+		server.env = { ...server.env, FAKE_HANG_INITIALIZE: "1" };
+
+		const started = Date.now();
+		const result = await activate(session, filePath, "edit");
+		expect(Date.now() - started).toBeLessThan(1500);
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("pending — no diagnostics received yet from fake");
+		expect(result.formatted).toContain("wait budget exhausted");
+	}, timeout);
+
+	it("shares the edit deadline across a ready server and a cold server", async () => {
+		const project = await createProject();
+		projects.push(project.projectRoot);
+		const config = fakeConfig({ waitMs: 300 });
+		if (config.lsp === false) throw new Error("Expected server configuration");
+		const ready = config.lsp.fake;
+		if (!ready) throw new Error("Expected fake server");
+		config.lsp = { ready: { ...ready } };
+		const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
+		sessions.push(session);
+		await activate(session, project.filePath, "read");
+		config.lsp.cold = { ...ready, env: { FAKE_HANG_INITIALIZE: "1" } };
+
+		const started = Date.now();
+		const result = await activate(session, project.filePath, "edit");
+		expect(Date.now() - started).toBeLessThan(1500);
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("ready: fresh: current");
+		expect(result.formatted).toContain("pending — no diagnostics received yet from cold");
+		expect(result.formatted).toContain("wait budget exhausted");
+	}, timeout);
+
 	it("bounds delayed edit feedback and reports stale or pending content", async () => {
 		const { filePath, session } = await setup({ delayMs: 8000, waitMs: 500 });
 		const started = Date.now();
