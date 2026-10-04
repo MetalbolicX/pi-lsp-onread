@@ -6,7 +6,7 @@ import type { EffectiveConfig } from "../../../src/config/types.js";
 
 export const fixtureServer = fileURLToPath(new URL("../../fixtures/fake-lsp-server.mjs", import.meta.url));
 
-export function fakeConfig(options: { delayMs?: number; waitMs?: number; command?: string[]; pullDiagnostics?: boolean; workspaceDiagnostics?: boolean; documentSymbols?: boolean } = {}): EffectiveConfig {
+export function fakeConfig(options: { delayMs?: number; waitMs?: number; command?: string[]; pullDiagnostics?: boolean; workspaceDiagnostics?: boolean; documentSymbols?: boolean; workspaceSymbols?: boolean } = {}): EffectiveConfig {
 	return {
 		version: 1,
 		lsp: {
@@ -21,6 +21,7 @@ export function fakeConfig(options: { delayMs?: number; waitMs?: number; command
 					...(options.pullDiagnostics ? { FAKE_PULL_DIAGNOSTICS: "1" } : {}),
 					...(options.workspaceDiagnostics ? { FAKE_WORKSPACE_DIAGNOSTICS: "1" } : {}),
 					...(options.documentSymbols ? { FAKE_DOCUMENT_SYMBOLS: "1" } : {}),
+					...(options.workspaceSymbols ? { FAKE_WORKSPACE_SYMBOLS: "1" } : {}),
 				},
 				diagnostics: { onRead: "cached", onChange: "wait", waitMs: options.waitMs ?? 5000, severities: ["error"] },
 			},

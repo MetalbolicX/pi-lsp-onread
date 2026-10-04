@@ -7,6 +7,7 @@ const lastResultIds = new Map();
 const pullDiagnostics = process.env.FAKE_PULL_DIAGNOSTICS === "1";
 const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
 const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
+const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
 
@@ -102,6 +103,7 @@ function handle(message) {
 			};
 		}
 		if (documentSymbols) capabilities.documentSymbolProvider = true;
+		if (workspaceSymbols) capabilities.workspaceSymbolProvider = true;
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
@@ -139,6 +141,18 @@ function handle(message) {
 		const text = documents.get(message.params.textDocument.uri)?.text;
 		const result = text === undefined ? [] : documentSymbolsFor(text);
 		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "workspace/symbol" && workspaceSymbols) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const query = String(message.params?.query ?? "");
+		const entries = [...documents.entries()].flatMap(([uri, { text }]) => {
+			const flatten = (symbols) => symbols.flatMap((symbol) => [
+				{ name: symbol.name, kind: symbol.kind, location: { uri, range: symbol.range } },
+				...flatten(symbol.children ?? []),
+			]);
+			return flatten(documentSymbolsFor(text));
+		}).filter(({ name }) => name.toLowerCase().includes(query.toLowerCase()))
+			.sort((a, b) => a.name.localeCompare(b.name) || a.location.uri.localeCompare(b.location.uri));
+		send({ jsonrpc: "2.0", id: message.id, result: entries });
 	} else if (message.method === "workspace/diagnostic" && workspaceDiagnostics) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const previousResultIds = message.params?.previousResultIds ?? {};
