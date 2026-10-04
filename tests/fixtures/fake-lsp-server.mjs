@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import { stdin, stdout } from "node:process";
 
 let input = "";
 const documents = new Map();
+const lastResultIds = new Map();
+const pullDiagnostics = process.env.FAKE_PULL_DIAGNOSTICS === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 
 function send(message) {
@@ -10,8 +13,8 @@ function send(message) {
 	stdout.write(body);
 }
 
-function publish(uri, version, text) {
-	const diagnostics = text.split("\n").flatMap((line, index) => {
+function diagnosticsFor(text) {
+	return text.split("\n").flatMap((line, index) => {
 		if (!line.includes("error:")) return [];
 		return [{
 			range: { start: { line: index, character: 0 }, end: { line: index, character: line.length } },
@@ -20,6 +23,10 @@ function publish(uri, version, text) {
 			message: line,
 		}];
 	});
+}
+
+function publish(uri, version, text) {
+	const diagnostics = diagnosticsFor(text);
 	const params = { uri, diagnostics };
 	if (Number.isInteger(version)) params.version = version;
 	send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params });
@@ -61,7 +68,11 @@ function handle(message) {
 		}
 	} else if (message.method === "initialize") {
 		if (process.env.FAKE_HANG_INITIALIZE === "1") return;
-		send({ jsonrpc: "2.0", id: message.id, result: { capabilities: { textDocumentSync: 1 } } });
+		const capabilities = { textDocumentSync: 1 };
+		if (pullDiagnostics) {
+			capabilities.diagnosticProvider = { interFileDependencies: false, workspaceDiagnostics: false };
+		}
+		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
 		if (process.env.FAKE_EXIT_AFTER_READY === "1") setTimeout(() => process.exit(0), 10);
@@ -78,6 +89,20 @@ function handle(message) {
 		setTimeout(() => publish(uri, version, text), delayMs);
 	} else if (message.method === "textDocument/didClose") {
 		documents.delete(message.params.textDocument.uri);
+		lastResultIds.delete(message.params.textDocument.uri);
+	} else if (message.method === "textDocument/diagnostic" && pullDiagnostics) {
+		const { uri } = message.params.textDocument;
+		const { previousResultId } = message.params;
+		const text = documents.get(uri)?.text ?? "";
+		const resultId = createHash("sha256").update(text).digest("hex");
+		const unchanged = previousResultId !== undefined
+			&& previousResultId === lastResultIds.get(uri)
+			&& previousResultId === resultId;
+		lastResultIds.set(uri, resultId);
+		const result = unchanged
+			? { kind: "unchanged", resultId }
+			: { kind: "full", resultId, items: diagnosticsFor(text) };
+		send({ jsonrpc: "2.0", id: message.id, result });
 	} else if (message.method === "exit") {
 		process.exit(0);
 	} else if (message.id !== undefined) {
