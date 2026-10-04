@@ -149,7 +149,7 @@ function handle(message) {
 			send({ jsonrpc: "2.0", id: message.id, result: null });
 			return;
 		}
-		const position = message.params.position;
+		const { position } = message.params;
 		const character = Number.isInteger(position.character) && position.character >= 0 ? position.character : 0;
 		const point = { line, character };
 		send({ jsonrpc: "2.0", id: message.id, result: { uri, range: { start: point, end: point } } });
