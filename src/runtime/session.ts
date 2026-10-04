@@ -57,6 +57,9 @@ export class RuntimeSession {
 	readonly pool = new Map<string, LspClient>();
 	readonly pendingClients = new Map<string, Promise<ClientFactoryResult>>();
 	private readonly pendingSnapshots = new Set<PendingSnapshot>();
+	private readonly countedFailureClients = new WeakSet<LspClient>();
+	private disposed = false;
+	private disposal: Promise<void> | undefined;
 	private readonly factory: ClientFactory;
 	private readonly failureStates = new Map<string, StartFailureState>();
 	private readonly retryCooldownMs: number;
@@ -98,6 +101,7 @@ export class RuntimeSession {
 	}
 
 	getOrCreateClient(key: string, options: ClientFactoryOptions): Promise<ClientFactoryResult> {
+		if (this.disposed) return Promise.resolve({ ok: false, message: "LSP session is disposed" });
 		const failure = this.failureStates.get(key);
 		if (failure?.disabledForSession) {
 			return Promise.resolve({ ok: false, message: `server ${options.serverId} disabled for session after ${failure.consecutiveFailures} consecutive start failures` });
@@ -115,16 +119,20 @@ export class RuntimeSession {
 		const creation = (async (): Promise<ClientFactoryResult> => {
 			try {
 				const result = await this.factory(options);
+				if (result.ok && this.disposed) {
+					await result.client.dispose().catch(() => {});
+					return { ok: false, message: "LSP session is disposed" };
+				}
 				if (result.ok) {
 					this.pool.set(key, result.client);
-					this.attachDiagnostics(result.client);
-				} else {
+					this.attachDiagnostics(result.client, key);
+				} else if (!this.disposed) {
 					this.recordStartFailure(key);
 				}
 				return result;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				this.recordStartFailure(key);
+				if (!this.disposed) this.recordStartFailure(key);
 				return { ok: false, message };
 			} finally {
 				this.pendingClients.delete(key);
@@ -135,18 +143,22 @@ export class RuntimeSession {
 	}
 
 	async recordStartFailure(key: string, client?: LspClient): Promise<void> {
-		const state = this.failureStates.get(key) ?? { consecutiveFailures: 0, lastFailedAt: 0, disabledForSession: false };
-		state.consecutiveFailures += 1;
-		state.lastFailedAt = this.clock();
-		state.disabledForSession = state.consecutiveFailures >= this.maxConsecutiveStartFailures;
-		this.failureStates.set(key, state);
+		if (!client || !this.countedFailureClients.has(client)) {
+			if (client) this.countedFailureClients.add(client);
+			const state = this.failureStates.get(key) ?? { consecutiveFailures: 0, lastFailedAt: 0, disabledForSession: false };
+			state.consecutiveFailures += 1;
+			state.lastFailedAt = this.clock();
+			state.disabledForSession = state.consecutiveFailures >= this.maxConsecutiveStartFailures;
+			this.failureStates.set(key, state);
+		}
 		if (client && this.pool.get(key) === client) {
 			this.pool.delete(key);
 			await client.dispose().catch(() => {});
 		}
 	}
 
-	recordStartSuccess(key: string): void {
+	recordStartSuccess(key: string, client?: LspClient): void {
+		if (client) this.countedFailureClients.delete(client);
 		const state = this.failureStates.get(key);
 		if (state) {
 			state.consecutiveFailures = 0;
@@ -162,7 +174,8 @@ export class RuntimeSession {
 		return { promise, cancel: () => this.pendingSnapshots.delete(waiter) };
 	}
 
-	attachDiagnostics(client: LspClient): void {
+	attachDiagnostics(client: LspClient, key?: string): void {
+		if (key && typeof client.onFailure === "function") client.onFailure(() => { void this.recordStartFailure(key, client); });
 		client.onPublishDiagnostics((event) => {
 			const version = typeof event.version === "number" ? event.version : null;
 			const snapshot: Snapshot = {
@@ -185,11 +198,18 @@ export class RuntimeSession {
 		});
 	}
 
-	async dispose(): Promise<void> {
-		const clients = [...this.pool.values()];
-		this.pool.clear();
+	dispose(): Promise<void> {
+		if (this.disposal) return this.disposal;
+		this.disposed = true;
 		this.pendingSnapshots.clear();
-		await Promise.allSettled(clients.map((client) => client.dispose()));
+		this.disposal = (async () => {
+			await Promise.allSettled(this.pendingClients.values());
+			const clients = [...this.pool.values()];
+			this.pool.clear();
+			this.pendingClients.clear();
+			await Promise.allSettled(clients.map((client) => client.dispose()));
+		})();
+		return this.disposal;
 	}
 }
 

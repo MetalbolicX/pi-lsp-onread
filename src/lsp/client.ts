@@ -3,7 +3,7 @@ import type { ChildProcess } from "node:child_process";
 import { DocumentTracker } from "./documents.js";
 import { terminateServer } from "./transport.js";
 
-export type ClientState = "starting" | "ready" | "disposed";
+export type ClientState = "starting" | "ready" | "failed" | "disposed";
 
 export interface ClientOptions {
 	serverId: string;
@@ -47,6 +47,7 @@ export class LspClient {
 	private failure: Error | undefined;
 	private disposal: Promise<void> | undefined;
 	private readonly listeners = new Set<(event: PublishedDiagnostics) => void>();
+	private readonly failureListeners = new Set<(error: Error) => void>();
 
 	constructor(private readonly child: ChildProcess, private readonly options: ClientOptions) {
 		if (!child.stdout || !child.stdin) throw new Error("LSP child must have piped stdin and stdout");
@@ -63,10 +64,9 @@ export class LspClient {
 			// v1 returns configured settings uniformly; it does not resolve per-section settings.
 			params.items.map(() => this.options.settings ?? null),
 		);
-		this.connection.onError(([error]) => {
-			this.failure = error;
-			void this.dispose();
-		});
+		this.connection.onError(([error]) => this.markFailed(error));
+		this.connection.onClose(() => this.markFailed(new Error("LSP connection closed")));
+		child.once("exit", (code, signal) => this.markFailed(new Error(`LSP process exited (code ${code ?? "null"}, signal ${signal ?? "none"})`)));
 		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
 			const event: PublishedDiagnostics = { ...params, serverId: this.options.serverId };
 			for (const listener of this.listeners) listener(event);
@@ -85,7 +85,22 @@ export class LspClient {
 		return () => this.listeners.delete(listener);
 	}
 
+	onFailure(listener: (error: Error) => void): () => void {
+		this.failureListeners.add(listener);
+		if (this.failure) listener(this.failure);
+		return () => this.failureListeners.delete(listener);
+	}
+
+	private markFailed(error: Error): void {
+		if (this.state === "disposed" || this.failure) return;
+		this.failure = error;
+		this.state = "failed";
+		for (const listener of this.failureListeners) listener(error);
+		void this.dispose();
+	}
+
 	ensure(): Promise<ClientResult> {
+		if (this.failure) return Promise.resolve({ ok: false, error: { kind: "connection", message: this.failure.message } });
 		if (this.state === "disposed") return Promise.resolve({ ok: false, error: { kind: "disposed", message: "LSP client is disposed" } });
 		if (this.state === "ready") return Promise.resolve({ ok: true });
 		if (!this.initialization) this.initialization = this.initialize();

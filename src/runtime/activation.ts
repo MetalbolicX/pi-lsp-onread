@@ -70,7 +70,7 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 				failures.push(`failed to start ${match.serverId}: ${ensured.error.message}`);
 				continue;
 			}
-			session.recordStartSuccess(poolKey);
+			session.recordStartSuccess(poolKey, client);
 			const version = client.documents.version(uri);
 			const nextVersion = version === undefined ? 1 : version + (event === "edit" ? 1 : 0);
 			const ticket = event === "edit" ? session.watchPublication(match.serverId, uri, nextVersion) : undefined;

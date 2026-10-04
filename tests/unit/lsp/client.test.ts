@@ -2,6 +2,7 @@ import { once } from "node:events";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { createProtocolConnection } from "vscode-languageserver-protocol/node";
 import { LspClient } from "../../../src/lsp/client.js";
 import { spawnServer, type ServerProcess } from "../../../src/lsp/transport.js";
 
@@ -114,6 +115,31 @@ describe("LSP client", () => {
 		await exited;
 		expect(await client.ensure()).toMatchObject({ ok: false, error: { kind: "disposed" } });
 		await client.dispose();
+	}, timeout);
+
+	it("observes the protocol connection close event on clean exit after readiness", async () => {
+		const spawned = await spawnServer({ command: [process.execPath, fixture], cwd, env: { FAKE_EXIT_AFTER_READY: "1" } });
+		expect(spawned.ok).toBe(true);
+		if (!spawned.ok) throw new Error(spawned.error.message);
+		const connection = createProtocolConnection(spawned.child.stdout!, spawned.child.stdin!);
+		connection.listen();
+		const closed = new Promise<void>((resolve) => connection.onClose(resolve));
+		await connection.sendRequest("initialize", { processId: process.pid, rootUri: "file:///workspace/project", capabilities: {} });
+		await connection.sendNotification("initialized", {});
+		await closed;
+		await once(spawned.child, "exit");
+		connection.dispose();
+		expect(spawned.child.exitCode).toBe(0);
+	}, timeout);
+
+	it("probes clean child exit after readiness and reports a connection failure", async () => {
+		const client = await createClient({ FAKE_EXIT_AFTER_READY: "1" });
+		expect((await client.ensure()).ok).toBe(true);
+		const [child] = children;
+		if (!child) throw new Error("Expected child process");
+		await once(child, "exit");
+		expect(client.state).toBe("disposed");
+		expect(await client.ensure()).toMatchObject({ ok: false, error: { kind: "connection" } });
 	}, timeout);
 
 	it("keeps the connection usable after a request times out", async () => {

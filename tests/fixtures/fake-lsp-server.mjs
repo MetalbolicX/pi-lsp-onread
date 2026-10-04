@@ -64,6 +64,7 @@ function handle(message) {
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities: { textDocumentSync: 1 } } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
+		if (process.env.FAKE_EXIT_AFTER_READY === "1") setTimeout(() => process.exit(0), 10);
 	} else if (message.method === "shutdown") {
 		send({ jsonrpc: "2.0", id: message.id, result: null });
 	} else if (message.method === "textDocument/didOpen") {

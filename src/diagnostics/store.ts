@@ -4,7 +4,11 @@ export class DiagnosticsStore {
 	private readonly snapshots = new Map<string, Snapshot>();
 
 	record(snapshot: Snapshot): void {
-		this.snapshots.set(this.key(snapshot.serverId, snapshot.uri), snapshot);
+		const key = this.key(snapshot.serverId, snapshot.uri);
+		const previous = this.snapshots.get(key);
+		if (previous?.version !== null && previous?.version !== undefined
+			&& (snapshot.version === null || snapshot.version < previous.version)) return;
+		this.snapshots.set(key, snapshot);
 	}
 
 	get(serverId: string, uri: string): Snapshot | undefined {

@@ -120,6 +120,20 @@ describe("runtime activation", () => {
 		expect(await activate(session, filePath, "read")).toMatchObject({ kind: "inactive" });
 	}, timeout);
 
+	it("evicts a ready client after clean child exit and reports cooldown honestly", async () => {
+		const { filePath, session } = await setup();
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { FAKE_EXIT_AFTER_READY: "1" };
+		const first = await activate(session, filePath, "read");
+		expect(first.kind).toBe("ok");
+		const deadline = Date.now() + 2000;
+		while (session.pool.size > 0 && Date.now() < deadline) await sleep(10);
+		expect(session.pool.size).toBe(0);
+		const next = await activate(session, filePath, "read");
+		expect(next.kind === "ok" && next.formatted).toMatch(/failed to start fake: server fake retry in/);
+	}, timeout);
+
 	it("reports spawn errors per server and continues starting other matched servers", async () => {
 		const project = await createProject();
 		projects.push(project.projectRoot);
