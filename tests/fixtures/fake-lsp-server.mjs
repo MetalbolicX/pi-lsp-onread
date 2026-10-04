@@ -6,6 +6,7 @@ const documents = new Map();
 const lastResultIds = new Map();
 const pullDiagnostics = process.env.FAKE_PULL_DIAGNOSTICS === "1";
 const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
+const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
 
@@ -25,6 +26,28 @@ function diagnosticsFor(text) {
 			message: line,
 		}];
 	});
+}
+
+function documentSymbolsFor(text) {
+	const symbols = [];
+	let currentClass;
+	for (const [index, line] of text.split("\n").entries()) {
+		const trimmed = line.trim();
+		const range = { start: { line: index, character: 0 }, end: { line: index, character: line.length } };
+		const classMatch = trimmed.match(/class (\w+)/);
+		if (classMatch) {
+			currentClass = { name: classMatch[1], detail: "class", kind: 5, range, selectionRange: range, children: [] };
+			symbols.push(currentClass);
+			continue;
+		}
+		const functionMatch = trimmed.match(/(?:export )?(?:async )?function (\w+)/);
+		if (functionMatch) {
+			const symbol = { name: functionMatch[1], detail: "function", kind: 12, range, selectionRange: range, children: [] };
+			if (currentClass) currentClass.children.push(symbol);
+			else symbols.push(symbol);
+		}
+	}
+	return symbols;
 }
 
 function publish(uri, version, text) {
@@ -78,6 +101,7 @@ function handle(message) {
 				workspaceDiagnostics,
 			};
 		}
+		if (documentSymbols) capabilities.documentSymbolProvider = true;
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
@@ -109,6 +133,11 @@ function handle(message) {
 		const result = unchanged
 			? { kind: "unchanged", resultId }
 			: { kind: "full", resultId, items: diagnosticsFor(text) };
+		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/documentSymbol" && documentSymbols) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const text = documents.get(message.params.textDocument.uri)?.text;
+		const result = text === undefined ? [] : documentSymbolsFor(text);
 		send({ jsonrpc: "2.0", id: message.id, result });
 	} else if (message.method === "workspace/diagnostic" && workspaceDiagnostics) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
