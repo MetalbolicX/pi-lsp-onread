@@ -57,7 +57,12 @@ Feature-branch chain (cached user choice). Forecast ~450 authored lines.
 
 ## Review record
 
-- Native assessment and lineage recorded at close (see below after review completes).
+- Native assessment: medium risk (executable change, 417 changed lines vs feature/on-demand-diagnostics base; slice budget reached).
+- Two stale consent bindings (distinct ids) before the third START created lineage `review-af6c2eb7ab9f31d0` (medium, review-reliability).
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational findings (separate later work):
+  - R3-001 — `src/diagnostics/format.ts:53` (WARNING)
+  - R3-002 — `src/runtime/activation.ts:209` (WARNING)
 
 ## Route evidence
 
