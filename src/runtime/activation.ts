@@ -1,4 +1,5 @@
-import { pathToFileURL } from "node:url";
+import { basename, dirname } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { formatForEdit, formatForRead } from "../diagnostics/format.js";
 import { computeDelta } from "../diagnostics/delta.js";
 import { apply, itemLine } from "../diagnostics/policy.js";
@@ -121,6 +122,12 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 					if (budget > 0) await session.pullFresh(outcome.match.serverId, uri, budget, outcome.client);
 				}));
 			}
+			await Promise.all(outcomes.map(async (outcome) => {
+				const provider = outcome && "client" in outcome ? outcome.client?.capabilities()?.diagnosticProvider as { workspaceDiagnostics?: unknown } | undefined : undefined;
+				if (!provider || provider.workspaceDiagnostics !== true) return;
+				const budget = Math.max(0, waitMs - (session.clock() - startedAt));
+				if (budget > 0) await session.pullWorkspace(outcome.match.serverId, budget, outcome.client);
+			}));
 		}
 		for (const waiter of waiters) waiter.cancel();
 	};
@@ -202,6 +209,40 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 			const lines = formatted.split("\n");
 			lines.splice(Math.max(0, lines.length - 1), 0, ...fallbackLines);
 			formatted = lines.join("\n");
+		}
+	}
+	if (event === "edit") {
+		const changedByUri = new Map<string, Set<string>>();
+		for (const changed of session.changedSince(startedAt)) {
+			if (changed.uri === uri) continue;
+			const serverIds = changedByUri.get(changed.uri) ?? new Set<string>();
+			serverIds.add(changed.serverId);
+			changedByUri.set(changed.uri, serverIds);
+		}
+		const changedFiles = [...changedByUri.entries()].sort(([left], [right]) => left.localeCompare(right));
+		if (changedFiles.length > 0) {
+			const lines = ["Cross-file changes since previous snapshots:"];
+			for (const [changedUri, serverIds] of changedFiles.slice(0, policy.maxItems)) {
+				const filePath = fileURLToPath(changedUri);
+				const label = `${basename(filePath)}(${basename(dirname(filePath))})`;
+				for (const serverId of [...serverIds].sort((a, b) => a.localeCompare(b))) {
+					const current = session.diagnostics.get(serverId, changedUri);
+					if (!current) continue;
+					const baseline = session.diagnostics.baseline(serverId, changedUri);
+					if (baseline) {
+						const computed = computeDelta(baseline, current);
+						lines.push(`${label}: ${serverId}: ${computed.newlyObserved.length} newly observed, ${computed.resolved.length} resolved`);
+					} else {
+						lines.push(`${label}: ${serverId}: ${current.items.length} diagnostics (first observation)`);
+					}
+				}
+			}
+			if (changedFiles.length > policy.maxItems) lines.push(`… and ${changedFiles.length - policy.maxItems} more changed files`);
+			lines.push("cross-file coverage: changes in other files are reported only as surfaced by servers (push or workspace pull); files not reported remain unchecked.");
+			const output = formatted.split("\n");
+			const waitedIndex = output.findIndex((line) => line.startsWith("waited "));
+			output.splice(waitedIndex < 0 ? output.length : waitedIndex, 0, ...lines);
+			formatted = output.join("\n");
 		}
 	}
 	return {

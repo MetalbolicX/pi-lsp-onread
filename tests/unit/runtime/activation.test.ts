@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { writeFile } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { RuntimeSession } from "../../../src/runtime/session.js";
 import { activate } from "../../../src/runtime/activation.js";
@@ -20,7 +21,7 @@ function recordHistory(session: RuntimeSession, uri: string, serverIds: string[]
 	}
 }
 
-async function setup(options: { trusted?: boolean; delayMs?: number; waitMs?: number; command?: string[]; pullDiagnostics?: boolean } = {}) {
+async function setup(options: { trusted?: boolean; delayMs?: number; waitMs?: number; command?: string[]; pullDiagnostics?: boolean; workspaceDiagnostics?: boolean } = {}) {
 	const project = await createProject(options.trusted ?? true);
 	projects.push(project.projectRoot);
 	const session = await RuntimeSession.create({ config: fakeConfig(options), projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
@@ -297,6 +298,100 @@ describe("runtime activation", () => {
 		expect(newSection.match(/fake-lsp: error: (first|second)/g)).toHaveLength(1);
 		const resolvedSection = result.formatted.split("Resolved since previous snapshot:")[1]?.split("waited ")[0] ?? "";
 		expect(resolvedSection.match(/^- /gm)).toHaveLength(1);
+	}, timeout);
+
+	it("reports workspace-pulled changes in other tracked files against their own baseline", async () => {
+		const { filePath, projectRoot, session } = await setup({ waitMs: 1000, workspaceDiagnostics: true });
+		const otherPath = `${projectRoot}/caller.ts`;
+		await writeFile(otherPath, "error: before\n");
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_SUPPRESS_PUBLISH: "1" };
+		await activate(session, otherPath, "read");
+		const otherUri = new URL(`file://${otherPath}`).href;
+		recordHistory(session, otherUri, ["fake"], "error: old", "error: before");
+		const client = session.pool.get(session.getPoolKey("fake", projectRoot));
+		if (!client) throw new Error("Expected pooled fake client");
+		await client.documents.change(otherUri, "error: after\nerror: extra\n");
+		await sleep(50);
+		await writeFile(filePath, "error: edited\n");
+
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		const crossFile = result.formatted.split("Cross-file changes since previous snapshots:")[1] ?? "";
+		expect(crossFile).toContain(`caller.ts(${basename(dirname(otherPath))}): fake: 2 newly observed, 1 resolved`);
+		expect(result.formatted).toContain("cross-file coverage: changes in other files are reported only as surfaced by servers (push or workspace pull); files not reported remain unchecked.");
+	}, timeout);
+
+	it("omits cross-file output when only the edited file changes", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000, workspaceDiagnostics: true });
+		await writeFile(filePath, "error: edited\n");
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).not.toContain("Cross-file changes since previous snapshots:");
+		expect(result.formatted).not.toContain("cross-file coverage:");
+	}, timeout);
+
+	it("labels changed files without a baseline as first observations", async () => {
+		const { filePath, projectRoot, session } = await setup({ waitMs: 1000, workspaceDiagnostics: true });
+		const otherPath = `${projectRoot}/new-file.ts`;
+		await writeFile(otherPath, "error: new file\n");
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_SUPPRESS_PUBLISH: "1" };
+		await activate(session, filePath, "read");
+		const client = session.pool.get(session.getPoolKey("fake", projectRoot));
+		if (!client) throw new Error("Expected pooled fake client");
+		const otherUri = new URL(`file://${otherPath}`).href;
+		await client.documents.open(otherUri, "typescript", "error: new file\n");
+		await writeFile(filePath, "error: edited\n");
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain(`new-file.ts(${basename(dirname(otherPath))}): fake: 1 diagnostics (first observation)`);
+	}, timeout);
+
+	it("caps cross-file summaries at maxItems and reports the omitted count", async () => {
+		const { filePath, projectRoot, session } = await setup({ waitMs: 1000, workspaceDiagnostics: true });
+		const config = session.configResult;
+		if (!config.ok) throw new Error("Expected configuration");
+		config.config.diagnostics.maxItems = 1;
+		for (const name of ["a.ts", "b.ts"]) {
+			const otherPath = `${projectRoot}/${name}`;
+			await writeFile(otherPath, `error: ${name}\n`);
+			await activate(session, otherPath, "read");
+		}
+		await writeFile(filePath, "error: edited\n");
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("… and 1 more changed files");
+	}, timeout);
+
+	it("does not render cross-file output on reads", async () => {
+		const { filePath, session } = await setup({ workspaceDiagnostics: true });
+		session.diagnostics.record({ serverId: "fake", uri: "file:///elsewhere.ts", version: 1, receivedAt: session.clock(), items: [diagnostic("error: elsewhere")] });
+		const result = await activate(session, filePath, "read");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).not.toContain("Cross-file changes since previous snapshots:");
+		expect(result.formatted).not.toContain("cross-file coverage:");
+	}, timeout);
+
+	it("bounds hanging workspace pulls and still renders edit output", async () => {
+		const { filePath, session } = await setup({ waitMs: 250, workspaceDiagnostics: true });
+		const config = session.configResult;
+		if (!config.ok || config.config.lsp === false || !config.config.lsp.fake) throw new Error("Expected fake server configuration");
+		config.config.lsp.fake.env = { ...config.config.lsp.fake.env, FAKE_HANG_METHOD: "workspace/diagnostic" };
+		const started = Date.now();
+		const result = await activate(session, filePath, "edit");
+		expect(Date.now() - started).toBeLessThan(1500);
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("Diagnostics for broken.ts:");
+		expect(result.formatted).not.toContain("cross-file coverage:");
 	}, timeout);
 
 	it("denies untrusted roots without spawning and returns trust guidance verbatim", async () => {
