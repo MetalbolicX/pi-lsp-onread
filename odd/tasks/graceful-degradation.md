@@ -150,3 +150,12 @@ default. No redesign of the approved retry policy.
   before T3.
 - 2026-10-04: delivery menu answered — feature-branch-chain. Slice-close
   native review started on slice 1 (main..HEAD).
+- 2026-10-04: slice 1 review APPROVED — lineage review-71605bfa66f27a6c,
+  medium tier, review-reliability lens, 12 files / 552 lines, correction
+  budget 200. One informational advisory: R3-001 reliability WARNING at
+  src/runtime/activation.ts:81 (non-blocking; later work, does not reopen
+  this review). Acknowledgement burned (consumed revision
+  sha256:8867f29a…); delivery follows ordinary repository policy.
+- 2026-10-04: slice 2 opened on branch `feat/graceful-degradation-config`
+  (off feat/graceful-degradation @ a4e0ba5) for T3; next reviewed boundary
+  becomes the following assess base.
