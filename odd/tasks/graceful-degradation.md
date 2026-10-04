@@ -38,20 +38,26 @@ default. No redesign of the approved retry policy.
 
 ## Tasks
 
-### T1 — Shared foreground deadline + truthful fallback (test-first) [in progress]
-- [ ] RED: edit with a cold server whose initialize exceeds `waitMs`
-      currently awaits startup beyond the deadline (awaited `ensure()` in
-      `src/runtime/activation.ts` before the bounded publication wait)
-- [ ] GREEN: one deadline per activation = `startedAt + waitMs` covering
-      startup AND publication wait; expiry attaches cached diagnostics with
-      pending/unavailable labels via the existing format paths; startup
-      continues in background; the sequential per-server `ensure()` loop
-      respects the remaining budget across multiple matched servers
-- [ ] Tests: cold start exceeding `waitMs` returns within budget with a
-      pending label; mixed servers (one ready, one cold); label
-      truthfulness (waited vs pending vs stale); reads unchanged
-- [ ] Checks: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+### T1 — Shared foreground deadline + truthful fallback (test-first) [done]
+- [x] RED observed: cold initialize awaited 15,048 ms against a 1,500 ms
+      limit (activation ignored waitMs during startup)
+- [x] GREEN: one deadline per activation = `startedAt + waitMs` covering
+      startup AND publication wait across all matched servers; expiry
+      attaches cached diagnostics with pending/unavailable labels; startup
+      continues in background; per-server ensure loop respects the
+      remaining budget; reads unchanged (immediate `await work`)
+- [x] Tests: cold start exceeding `waitMs` returns in budget with pending
+      label; mixed ready/cold servers; truthful labels; reads unchanged
+- [x] Checks: typecheck, lint, test (132 passing / 26 files), build
 - Route: delegated (gentle-ai-worker).
+- Commit: `a5deaa8` — feat(runtime): bound edit feedback with a shared
+  startup deadline (+102/−55 activation.ts, +40 tests; 2 files)
+- Assess: medium (executable_change), writerProfile large (runtime);
+  writer self-verification stands, no separate verifier; reviewDue false
+  (under budget) → native review deferred to slice close. Review note for
+  close: potential unhandled rejection if activation work rejects after a
+  deadline win (current paths return outcomes; T2 covers failure
+  accounting).
 
 ### T2 — Lifecycle reliability: dead transports, races, shutdown (test-first) [pending]
 - [ ] Probe and record what the protocol connection emits on clean child
@@ -118,3 +124,8 @@ default. No redesign of the approved retry policy.
   dependency-range refresh already present in the worktree committed as a
   separate chore (with `.codegraph/` gitignored); feature plan committed as
   docs. T1 delegated to `gentle-ai-worker` (background).
+- 2026-10-03: T1 complete — a5deaa8. RED observed (15,048 ms vs 1,500 ms
+  limit), GREEN with 132 tests / 26 files; parent spot check re-ran the
+  full suite and reviewed the diff. Assess medium/large-writer →
+  self-verification stands; review deferred to slice close (running count
+  102 authored lines incl. housekeeping). T2 delegated.
