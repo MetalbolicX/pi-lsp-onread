@@ -8,7 +8,7 @@ Status: **early implementation** — project LSP configuration, runtime activati
 
 - **Config**: extension-owned `~/.pi/agent/lsp.json` (global) and `.pi/lsp.json` (project). OpenCode-like server entries (`command`, `extensions`, `env`, `initialization`, `disabled`) plus `languageId` and `rootMarkers` for custom languages and monorepos. Bundled JSON Schema, Draft 2020-12 (`schema/lsp.schema.json`).
 - **Activation**: the first successful read/edit/write of a matching file starts the configured server in the background, pooled per server id + project root. Loading configuration starts nothing.
-- **Diagnostics**: reads append cached errors with freshness labels — never blocking, never implying "clean". Edit/write get a bounded wait (default 5000 ms); v1 supports push diagnostics only; output is capped (default 10 items / 4000 chars).
+- **Diagnostics**: reads append cached errors with freshness labels — never blocking, never implying "clean". Edit/write get a bounded wait (default 5000 ms); v1 supports push diagnostics only; output is capped (default 10 items / 4000 chars). On edit/write, when a previous snapshot exists for a matched server, feedback reports a delta since that previous snapshot — newly observed diagnostics in full, resolved ones as brief one-liners, and unchanged ones collapsed to a count. Deltas describe observations since the previous snapshot, never causality; servers without a previous snapshot keep the full-list output.
 - **Boundaries**: the CLI authors configuration; the extension owns activation and feedback. Neither downloads or installs language servers, and builds are never launched automatically. Workspace trust is runtime-owned.
 
 ## CLI
