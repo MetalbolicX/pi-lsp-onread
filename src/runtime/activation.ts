@@ -1,7 +1,8 @@
 import { pathToFileURL } from "node:url";
 import { formatForEdit, formatForRead } from "../diagnostics/format.js";
-import { apply } from "../diagnostics/policy.js";
-import type { SnapshotInput } from "../diagnostics/types.js";
+import { computeDelta } from "../diagnostics/delta.js";
+import { apply, itemLine } from "../diagnostics/policy.js";
+import type { PolicyItem, SnapshotInput } from "../diagnostics/types.js";
 import { matchServers } from "../workspace/match.js";
 import { resolveRoot } from "../workspace/roots.js";
 import { authorize, untrustedGuidance } from "./authorization.js";
@@ -43,6 +44,11 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 
 	const policy = config.diagnostics;
 	const waitMs = Math.max(0, policy.waitMs);
+	// Capture retained baselines before this activation can record a publication; a wait may
+	// replace the store's baseline, but comparison must use the pre-edit retained snapshot.
+	const editBaselines = event === "edit"
+		? new Map(matches.map(({ serverId }) => [serverId, session.diagnostics.baseline(serverId, uri)]))
+		: new Map();
 	const failures: string[] = [];
 	let waited = false;
 	const getOutcomes = async () => Promise.all(matches.map(async (match) => {
@@ -95,7 +101,7 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 			if (remaining > 0) {
 				let timer: ReturnType<typeof setTimeout> | undefined;
 				const publication = (async () => {
-					await Promise.race(waiters.map((waiter) => waiter.promise));
+					await Promise.all(waiters.map((waiter) => waiter.promise));
 					return true;
 				})();
 				const timedOut = new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), remaining); });
@@ -130,9 +136,61 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 		}];
 	});
 	const results = apply({ snapshots, policy });
-	const formatted = event === "read"
+	let delta: { serverId: string; newlyObserved: PolicyItem[]; resolved: PolicyItem[]; unchangedCount: number } | undefined;
+	if (event === "edit") {
+		const newlyObservedInputs: SnapshotInput[] = [];
+		const resolvedInputs: SnapshotInput[] = [];
+		let unchangedCount = 0;
+		const deltaServerIds: string[] = [];
+		for (const current of snapshots) {
+			const baseline = editBaselines.get(current.serverId);
+			if (!baseline || !current.snapshot) continue;
+			deltaServerIds.push(current.serverId);
+			const computed = computeDelta(baseline, current.snapshot);
+			unchangedCount += computed.unchangedCount;
+			newlyObservedInputs.push({
+				serverId: current.serverId,
+				currentVersion: current.currentVersion,
+				snapshot: { ...current.snapshot, items: computed.newlyObserved },
+			});
+			resolvedInputs.push({
+				serverId: current.serverId,
+				currentVersion: current.currentVersion,
+				snapshot: { ...baseline, items: computed.resolved },
+			});
+		}
+		if (deltaServerIds.length > 0) {
+			const orderedServerIds = [...deltaServerIds].sort((a, b) => a.localeCompare(b));
+			const newlyObserved = apply({ snapshots: newlyObservedInputs, policy }).items
+				.sort((a, b) => a.serverId.localeCompare(b.serverId));
+			const resolved = apply({
+				snapshots: resolvedInputs,
+				policy: { ...policy, maxChars: Number.MAX_SAFE_INTEGER },
+			}).items.sort((a, b) => a.serverId.localeCompare(b.serverId));
+			delta = {
+				serverId: orderedServerIds.join(", "),
+				newlyObserved,
+				resolved,
+				unchangedCount,
+			};
+		}
+	}
+	let formatted = event === "read"
 		? formatForRead({ uri, results })
-		: formatForEdit({ uri, results, waited, waitedMs: waitMs > 0 ? Math.min(waitMs, Math.max(0, session.clock() - startedAt)) : 0 });
+		: formatForEdit({ uri, results, waited, waitedMs: waitMs > 0 ? Math.min(waitMs, Math.max(0, session.clock() - startedAt)) : 0, ...(delta ? { delta } : {}) });
+	if (delta) {
+		const fallbackServerIds = new Set(snapshots
+			.filter((snapshot) => !editBaselines.get(snapshot.serverId))
+			.map((snapshot) => snapshot.serverId));
+		const fallbackLines = results.items
+			.filter((item) => fallbackServerIds.has(item.serverId))
+			.map((item) => itemLine(item, item.serverId));
+		if (fallbackLines.length > 0) {
+			const lines = formatted.split("\n");
+			lines.splice(Math.max(0, lines.length - 1), 0, ...fallbackLines);
+			formatted = lines.join("\n");
+		}
+	}
 	return {
 		kind: "ok",
 		formatted: [...failures, formatted].join("\n"),

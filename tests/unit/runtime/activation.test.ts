@@ -1,4 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
+import { writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { RuntimeSession } from "../../../src/runtime/session.js";
 import { activate } from "../../../src/runtime/activation.js";
@@ -7,6 +8,17 @@ import { createProject, fakeConfig, fixtureServer, removeProject } from "./runti
 const sessions: RuntimeSession[] = [];
 const projects: string[] = [];
 const timeout = 20_000;
+
+function diagnostic(message: string, line = 0) {
+	return { range: { start: { line, character: 0 }, end: { line, character: message.length } }, severity: 1, source: "fake-lsp", message };
+}
+
+function recordHistory(session: RuntimeSession, uri: string, serverIds: string[], baselineMessage = "error: old", previousMessage = "error: unchanged") {
+	for (const serverId of serverIds) {
+		session.diagnostics.record({ serverId, uri, version: 0, receivedAt: 1, items: [diagnostic(baselineMessage)] });
+		session.diagnostics.record({ serverId, uri, version: 1, receivedAt: 2, items: [diagnostic(previousMessage)] });
+	}
+}
 
 async function setup(options: { trusted?: boolean; delayMs?: number; waitMs?: number; command?: string[] } = {}) {
 	const project = await createProject(options.trusted ?? true);
@@ -96,6 +108,128 @@ describe("runtime activation", () => {
 		if (result.kind !== "ok") throw new Error("Expected activation success");
 		expect(result.formatted).toMatch(/pending|stale/);
 		expect(result.formatted).toContain("wait budget exhausted");
+	}, timeout);
+
+	it("renders newly observed diagnostics and collapses unchanged items against a baseline", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000 });
+		const uri = new URL(`file://${filePath}`).href;
+		session.diagnostics.record({ serverId: "fake", uri, version: 0, receivedAt: 1, items: [diagnostic("error: old"), diagnostic("error: unchanged")] });
+		session.diagnostics.record({ serverId: "fake", uri, version: 1, receivedAt: 2, items: [diagnostic("error: unchanged")] });
+		await writeFile(filePath, "error: unchanged\nerror: new\n");
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("Delta since previous snapshot: 1 newly observed, 1 resolved, 1 unchanged.");
+		expect(result.formatted).toContain("error 2:1 fake-lsp: error: new");
+		expect(result.formatted).not.toContain("error: unchanged");
+	}, timeout);
+
+	it("keeps legacy edit output when no server has a baseline", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000 });
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted.replace(/waited \d+ms/, "waited <duration>ms")).toBe([
+			"Diagnostics for broken.ts:",
+			"fake: fresh: current",
+			"error 1:1 fake-lsp: error: broken source",
+			"waited <duration>ms; freshest available attached",
+		].join("\n"));
+	}, timeout);
+
+	it("merges multiple server deltas in alphabetical server order", async () => {
+		const project = await createProject();
+		projects.push(project.projectRoot);
+		const config = fakeConfig({ waitMs: 1000 });
+		if (config.lsp === false || !config.lsp.fake) throw new Error("Expected server config");
+		const server = config.lsp.fake;
+		config.lsp = { zeta: { ...server }, alpha: { ...server } };
+		const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
+		sessions.push(session);
+		const uri = new URL(`file://${project.filePath}`).href;
+		for (const serverId of ["zeta", "alpha"]) {
+			session.diagnostics.record({ serverId, uri, version: 0, receivedAt: 1, items: [diagnostic(`error: baseline ${serverId}`)] });
+			session.diagnostics.record({ serverId, uri, version: 1, receivedAt: 2, items: [diagnostic(`error: previous ${serverId}`)] });
+		}
+		await writeFile(project.filePath, "error: new\n");
+		const result = await activate(session, project.filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("Delta since previous snapshot: 2 newly observed, 2 resolved, 0 unchanged.");
+		const resolved = result.formatted.split("Resolved since previous snapshot:")[1]?.split("waited ")[0] ?? "";
+		expect(resolved.indexOf("baseline alpha")).toBeLessThan(resolved.indexOf("baseline zeta"));
+	}, timeout);
+
+	it("renders delta for servers with baselines and full items for first-observation servers", async () => {
+		const project = await createProject();
+		projects.push(project.projectRoot);
+		const config = fakeConfig({ waitMs: 1000 });
+		if (config.lsp === false || !config.lsp.fake) throw new Error("Expected server config");
+		const server = config.lsp.fake;
+		config.lsp = { zeta: { ...server }, alpha: { ...server } };
+		const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
+		sessions.push(session);
+		const uri = new URL(`file://${project.filePath}`).href;
+		session.diagnostics.record({ serverId: "alpha", uri, version: 0, receivedAt: 1, items: [diagnostic("error: old alpha"), diagnostic("error: unchanged alpha")] });
+		session.diagnostics.record({ serverId: "alpha", uri, version: 1, receivedAt: 2, items: [diagnostic("error: unchanged alpha")] });
+		await writeFile(project.filePath, "error: unchanged alpha\nerror: new\n");
+		const result = await activate(session, project.filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("Delta since previous snapshot: 1 newly observed, 1 resolved, 1 unchanged.");
+		const newlySection = result.formatted.split("Newly observed since previous snapshot:")[1]?.split("Resolved since previous snapshot:")[0] ?? "";
+		expect(newlySection).toContain("error: new");
+		expect(result.formatted).toContain("- error: old alpha");
+		expect(result.formatted.match(/error: unchanged alpha/g)?.length ?? 0).toBe(1);
+		expect(result.formatted.indexOf("error: new")).toBeLessThan(result.formatted.indexOf("waited "));
+	}, timeout);
+
+	it("never includes delta wording on reads", async () => {
+		const { filePath, session } = await setup();
+		const uri = new URL(`file://${filePath}`).href;
+		recordHistory(session, uri, ["fake"]);
+		const result = await activate(session, filePath, "read");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).not.toContain("Delta since previous snapshot");
+	}, timeout);
+
+	it("uses the retained baseline even when it predates the pre-edit snapshot", async () => {
+		const { filePath, session } = await setup({ waitMs: 1000 });
+		const uri = new URL(`file://${filePath}`).href;
+		recordHistory(session, uri, ["fake"], "error: retained baseline", "error: pre-edit snapshot");
+		await writeFile(filePath, "error: current\n");
+		const result = await activate(session, filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		expect(result.formatted).toContain("Delta since previous snapshot: 1 newly observed, 1 resolved, 0 unchanged.");
+		expect(result.formatted).toContain("error: current");
+		expect(result.formatted).not.toContain("error: pre-edit snapshot");
+	}, timeout);
+
+	it("caps merged newly observed and resolved delta lists", async () => {
+		const project = await createProject();
+		projects.push(project.projectRoot);
+		const config = fakeConfig({ waitMs: 1000 });
+		config.diagnostics.maxItems = 1;
+		if (config.lsp === false || !config.lsp.fake) throw new Error("Expected server config");
+		const server = config.lsp.fake;
+		config.lsp = { alpha: { ...server }, beta: { ...server } };
+		const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
+		sessions.push(session);
+		const uri = new URL(`file://${project.filePath}`).href;
+		for (const serverId of ["alpha", "beta"]) {
+			session.diagnostics.record({ serverId, uri, version: 0, receivedAt: 1, items: [diagnostic(`error: old ${serverId}`)] });
+			session.diagnostics.record({ serverId, uri, version: 1, receivedAt: 2, items: [diagnostic(`error: previous ${serverId}`)] });
+		}
+		await writeFile(project.filePath, "error: first\nerror: second\n");
+		const result = await activate(session, project.filePath, "edit");
+		expect(result.kind).toBe("ok");
+		if (result.kind !== "ok") throw new Error("Expected activation success");
+		const newSection = result.formatted.split("Newly observed since previous snapshot:")[1]?.split("Resolved since previous snapshot:")[0] ?? "";
+		expect(newSection.match(/fake-lsp: error: (first|second)/g)).toHaveLength(1);
+		const resolvedSection = result.formatted.split("Resolved since previous snapshot:")[1]?.split("waited ")[0] ?? "";
+		expect(resolvedSection.match(/^- /gm)).toHaveLength(1);
 	}, timeout);
 
 	it("denies untrusted roots without spawning and returns trust guidance verbatim", async () => {
