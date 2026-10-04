@@ -172,3 +172,16 @@ default. No redesign of the approved retry policy.
   (bounds consistent schema↔validate; per-server override with fallback;
   factory forwards client timeouts). Slice 2 assess medium/under budget;
   slice-close review on a4e0ba5..HEAD at feature close.
+- 2026-10-04: slice 2 review APPROVED — lineage review-a5075d222c71c61c,
+  medium tier, review-reliability lens, 10 files / 203 lines, correction
+  budget 102, no findings. Acknowledgement burned (consumed revision
+  sha256:8da57728…).
+
+## Feature COMPLETE
+All three tasks done, both slices reviewed and approved (slice 1:
+review-71605bfa66f27a6c; slice 2: review-a5075d222c71c61c). 148 tests /
+26 files green on `feat/graceful-degradation-config` @ 2bdcade. Delivery
+follows ordinary repository policy; merge/push/PR remain user decisions.
+Open follow-ups: informational advisory R3-001 (activation.ts:81, slice
+1, non-blocking); publishing prep (remote/push) is a separate user
+decision.
