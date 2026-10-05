@@ -15,7 +15,7 @@ export type ActivationResult =
 	| { kind: "inactive"; reason: string }
 	| { kind: "no-match" }
 	| { kind: "untrusted"; guidance: string }
-	| { kind: "ok"; formatted: string; matchedServers: string[]; skipped?: string[] };
+	| { kind: "ok"; formatted: string; matchedServers: string[]; canonicalRoot: string; skipped?: string[] };
 
 export async function activate(session: RuntimeSession, absoluteFilePath: string, event: ActivationEvent): Promise<ActivationResult> {
 	const { configResult } = session;
@@ -249,6 +249,7 @@ export async function activate(session: RuntimeSession, absoluteFilePath: string
 		kind: "ok",
 		formatted: [...failures, formatted].join("\n"),
 		matchedServers: matches.map((match) => match.serverId),
+		canonicalRoot,
 	};
 }
 
