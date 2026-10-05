@@ -5,6 +5,7 @@ import { RuntimeSession } from "./runtime/session.js";
 import { createHookBindings } from "./pi/hooks.js";
 import { registerLspDiagnosticsTool } from "./pi/lsp-diagnostics-tool.js";
 import { registerLspCodeActionsTool } from "./pi/lsp-code-actions-tool.js";
+import { registerLspOrganizeImportsTool } from "./pi/lsp-organize-imports-tool.js";
 import { registerLspDefinitionTool, registerLspReferencesTool } from "./pi/lsp-navigation-tools.js";
 import { registerLspSymbolsTool } from "./pi/lsp-symbols-tool.js";
 import { registerLspWorkspaceSymbolsTool } from "./pi/lsp-workspace-symbols-tool.js";
@@ -36,6 +37,7 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 		if (typeof pi.registerTool === "function") registerLspDefinitionTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspReferencesTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspCodeActionsTool(pi, getSession);
+		if (typeof pi.registerTool === "function") registerLspOrganizeImportsTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspSymbolsTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspWorkspaceSymbolsTool(pi, getSession);
 		createHookBindings(pi, {
