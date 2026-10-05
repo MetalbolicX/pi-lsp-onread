@@ -55,6 +55,10 @@ Each server entry may optionally set `initializeTimeoutMs` (default `15000`), `r
 
 Set the top-level `"scorecard": true` (default `false`) to append one bounded diagnostic scorecard entry when an agent turn settles after edits. The scorecard summarizes, per document the turn edited, current severity counts and, only when the document's baseline is current, how many diagnostics are newly observed or resolved since it; stale or unknown freshness is labeled honestly instead. The entry is display-only session data rendered in the transcript: it is never sent to the model, never triggers another run, and enforces the `diagnostics.maxItems`/`maxChars` caps with explicit truncation markers. Turns without edit activity append nothing.
 
+### Edit preflight
+
+The top-level `preflight` setting checks a file's current diagnostics immediately before Pi executes an `edit` or `write` tool call: `"advisory"` (the default when omitted), `"block"`, or `"off"`. Advisory mode never prevents the call; when fresh error-severity diagnostics already exist, the post-edit feedback gains one bounded note distinguishing those pre-existing errors, so new problems are not confused with old ones. Block mode additionally refuses the call — only when a matched server's diagnostics are **current** and contain error-severity items — with a bounded, actionable reason naming the file, count, and up to three messages. Preflight is fail-open by design: missing snapshots, unknown document versions, stale diagnostics, unmatched files, server failures, and its own internal errors never block anything, never mutate the tool input, and never start servers or sessions on their own.
+
 ## Development
 
 ```sh
