@@ -24,7 +24,9 @@ Non-goals: applying edits, workspace/applyEdit round-trips, `workspace/rename` o
 | R1 | `36859f8` | feat(preview): add overlap validation and rename requests |
 | R2 | `6d770f0` | feat(tools): add lsp_rename tool |
 | R3 | `092802d` | docs: document lsp_rename tool |
-| R4 | _pending_ | closure + review record |
+| R4 | `3a0275e` | docs: record rename-preview closure evidence |
+
+Review-record commit: follows as `docs: record rename-preview review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (R4)
 
@@ -36,4 +38,8 @@ Non-goals: applying edits, workspace/applyEdit round-trips, `workspace/rename` o
 
 ## Review record
 
-- _pending at close (R4)._
+- ASSESS (committed range, base `d685861a2d3a401781c1bcbed8be067e8d49d9b3` = branch base, committedOnly): medium risk, executable change (`src/extension.ts`), 10 paths / 497 lines, reviewDue = `slice_budget_reached`.
+- START with explicit full branch-base created lineage `review-becf8162a37508af` (medium, review-reliability).
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-prepare-range-response — `src/pi/lsp-rename-tool.ts:73-78` (WARNING; prepareRename may also answer a bare Range per LSP — hardening pass)
