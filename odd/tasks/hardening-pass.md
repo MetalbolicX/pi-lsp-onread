@@ -28,7 +28,9 @@ Non-goals: coordinate conversion, multi-encoding support, changing any tool outp
 | P1 | `0b621d3` | feat(lsp): advertise utf-16 position encoding at initialize |
 | P2 | `e4e99d3` | refactor(runtime): extract shared matched-client lookup in session requests |
 | P3 | `be2e179` | fix(tools): precise organize-imports matching and bare-range prepare ranges |
-| P4 | _pending_ | closure + review record |
+| P4 | `f916b29` | docs: record hardening-pass closure evidence |
+
+Review-record commit: follows as `docs: record hardening-pass review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (P4)
 
@@ -38,4 +40,6 @@ Non-goals: coordinate conversion, multi-encoding support, changing any tool outp
 
 ## Review record
 
-- _pending at close (P4)._
+- ASSESS (committed range, base `d979fb924addc78bd71993c8c8496d62f1d58b78` = branch base, committedOnly): medium risk, executable change (`src/lsp/client.ts`), 10 paths / 188 lines, reviewDue = `under_budget`.
+- One stale consent binding, then START with explicit full branch-base created lineage `review-7110ca626e8607a3` (medium, review-reliability). One capture resubmission after a parent-side binding transcription error (fresh STATUS re-offered the identical slot; resubmitted verbatim).
+- Native review: **approved — zero findings** (the session.ts advisory family and both tool advisories are retired); acknowledgement burned (`delivery: ordinary-repository-policy`).
