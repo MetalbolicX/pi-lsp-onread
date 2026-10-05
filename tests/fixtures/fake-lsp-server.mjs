@@ -101,6 +101,7 @@ function handle(message) {
 	} else if (message.method === "initialize") {
 		if (process.env.FAKE_HANG_INITIALIZE === "1") return;
 		const capabilities = { textDocumentSync: 1 };
+		if (process.env.FAKE_POSITION_ENCODING) capabilities.positionEncoding = process.env.FAKE_POSITION_ENCODING;
 		if (pullDiagnostics || workspaceDiagnostics) {
 			capabilities.diagnosticProvider = {
 				interFileDependencies: false,
@@ -193,8 +194,9 @@ function handle(message) {
 	} else if (message.method === "textDocument/prepareRename" && (rename || renameBoolean)) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const { line, character } = message.params.position ?? {};
+		const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 13 } };
 		const result = rename && line === 0 && character === 0
-			? { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 13 } }, placeholder: "fixtureSymbol" }
+			? process.env.FAKE_PREPARE_BARE_RANGE === "1" ? range : { range, placeholder: "fixtureSymbol" }
 			: null;
 		send({ jsonrpc: "2.0", id: message.id, result });
 	} else if (message.method === "textDocument/rename" && (rename || renameBoolean)) {
@@ -265,17 +267,25 @@ function handle(message) {
 		const { line: requestedLine } = start;
 		const line = Math.min(Number.isInteger(requestedLine) && requestedLine >= 0 ? requestedLine : 0, text.split("\n").length - 1);
 		const point = { line, character: 0 };
+		const organizeVariants = process.env.FAKE_ORGANIZE_IMPORTS_VARIANTS;
+		const organizeActions = organizeVariants === "exact-and-prefix"
+			? [
+				{ title: "Prefixed organize imports", kind: "source.organizeImports.file", edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: "// prefixed organize imports\n" }] } } },
+				{ title: "Exact organize imports", kind: "source.organizeImports", edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: "// exact organize imports\n" }] } } },
+			]
+			: organizeVariants === "prefix-only"
+				? [
+					{ title: "First prefixed organize imports", kind: "source.organizeImports.file", edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: "// first prefixed organize imports\n" }] } } },
+					{ title: "Second prefixed organize imports", kind: "source.organizeImports.module", edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: "// second prefixed organize imports\n" }] } } },
+				]
+				: [{ title: "Organize imports (needs resolve)", kind: "source.organizeImports", data: { uri, line } }];
 		const actions = [
 			{
 				title: "Fix thing (quickfix)",
 				kind: "quickfix",
 				edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: `// fixed line ${line}\n` }] } },
 			},
-			{
-				title: "Organize imports (needs resolve)",
-				kind: "source.organizeImports",
-				data: { uri, line },
-			},
+			...organizeActions,
 			{
 				title: "Do fake thing (command only)",
 				kind: "quickfix",

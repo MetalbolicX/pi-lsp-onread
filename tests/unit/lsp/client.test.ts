@@ -43,6 +43,18 @@ afterEach(async () => {
 });
 
 describe("LSP client", () => {
+	it("advertises utf-16 position encoding and exposes the server's negotiated encoding", async () => {
+		const client = await createClient({ FAKE_POSITION_ENCODING: "utf-16" });
+		expect((await client.ensure()).ok).toBe(true);
+		expect(client.positionEncoding()).toBe("utf-16");
+	}, timeout);
+
+	it("returns undefined when the server does not reply with a position encoding", async () => {
+		const client = await createClient();
+		expect((await client.ensure()).ok).toBe(true);
+		expect(client.positionEncoding()).toBeUndefined();
+	}, timeout);
+
 	it("advertises pull diagnostics and retains server capabilities", async () => {
 		const server = `
 			let input = "";
@@ -59,7 +71,10 @@ describe("LSP client", () => {
 						if (message.method === "initialize") {
 							const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { capabilities: {
 								textDocumentSync: 1,
-							experimental: { receivedDiagnosticCapability: !!message.params.capabilities.textDocument.diagnostic },
+							experimental: {
+									receivedDiagnosticCapability: !!message.params.capabilities.textDocument.diagnostic,
+									positionEncodings: message.params.capabilities.general?.positionEncodings,
+								},
 							} } }));
 							process.stdout.write("Content-Length: " + body.length + "\\r\\n\\r\\n");
 							process.stdout.write(body);
@@ -81,7 +96,7 @@ describe("LSP client", () => {
 		expect((await client.ensure()).ok).toBe(true);
 		expect(client.capabilities()).toEqual({
 			textDocumentSync: 1,
-			experimental: { receivedDiagnosticCapability: true },
+			experimental: { receivedDiagnosticCapability: true, positionEncodings: ["utf-16"] },
 		});
 	}, timeout);
 

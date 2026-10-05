@@ -48,6 +48,7 @@ export class LspClient {
 	private initialization: Promise<ClientResult> | undefined;
 	private failure: Error | undefined;
 	private serverCapabilities: ServerCapabilities | undefined;
+	private negotiatedPositionEncoding: string | undefined;
 	private disposal: Promise<void> | undefined;
 	private readonly listeners = new Set<(event: PublishedDiagnostics) => void>();
 	private readonly failureListeners = new Set<(error: Error) => void>();
@@ -90,6 +91,11 @@ export class LspClient {
 
 	capabilities(): ServerCapabilities | undefined {
 		return this.serverCapabilities;
+	}
+
+	/** The negotiated server encoding; this client advertises utf-16 only. */
+	positionEncoding(): string | undefined {
+		return this.negotiatedPositionEncoding;
 	}
 
 	onFailure(listener: (error: Error) => void): () => void {
@@ -167,11 +173,14 @@ export class LspClient {
 					synchronization: { dynamicRegistration: false, willSave: false, didSave: false },
 					diagnostic: {},
 				},
+				general: { positionEncodings: ["utf-16"] },
 			},
 			initializationOptions: this.options.initializationOptions ?? null,
 		}, this.options.initializeTimeoutMs ?? 15_000);
 		if (!result.ok) return this.failedInitialization(result);
 		this.serverCapabilities = result.value?.capabilities;
+		const positionEncoding = result.value?.capabilities?.positionEncoding;
+		this.negotiatedPositionEncoding = typeof positionEncoding === "string" ? positionEncoding : undefined;
 		if (this.isDisposed()) return this.failedInitialization({ ok: false, error: { kind: "disposed", message: "LSP client is disposed" } });
 		const initialized = await this.notify("initialized", {});
 		if (!initialized.ok) return this.failedInitialization(initialized);
