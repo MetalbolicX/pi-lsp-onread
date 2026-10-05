@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { buildEffectiveConfig } from "./config/index.js";
 import { activate } from "./runtime/activation.js";
@@ -14,6 +15,8 @@ import { registerLspFormattingTool } from "./pi/lsp-formatting-tool.js";
 import { registerLspDefinitionTool, registerLspReferencesTool } from "./pi/lsp-navigation-tools.js";
 import { registerLspSymbolsTool } from "./pi/lsp-symbols-tool.js";
 import { registerLspWorkspaceSymbolsTool } from "./pi/lsp-workspace-symbols-tool.js";
+import { computeScorecard } from "./diagnostics/scorecard.js";
+import { matchServers } from "./workspace/match.js";
 
 type SessionFactory = (projectRoot: string) => Promise<RuntimeSession>;
 
@@ -33,6 +36,15 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 		let sessionPromise: Promise<RuntimeSession> | undefined;
 		let disposed = false;
 		const cachedResults = new Map<string, string>();
+		const editedDocuments = new Map<string, { serverId: string; uri: string }>();
+		let scorecardSession: RuntimeSession | undefined;
+		const scorecardPi = pi as unknown as {
+			appendEntry?: (entry: { customType: string; data: unknown }) => unknown;
+			registerEntryRenderer?: (customType: string, renderer: (data: unknown) => unknown) => unknown;
+		};
+		if (typeof scorecardPi.registerEntryRenderer === "function") {
+			scorecardPi.registerEntryRenderer("lsp-scorecard", (data) => JSON.stringify(data));
+		}
 		const getSession = (projectRoot: string): Promise<RuntimeSession> => {
 			if (!sessionPromise) sessionPromise = (options.createSession ?? defaultSessionFactory)(projectRoot);
 			return sessionPromise;
@@ -67,6 +79,13 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 				const cacheKey = `${projectRoot}::${absoluteFilePath}`;
 				const performActivation = async () => {
 					const session = await getSession(projectRoot);
+					if (!disposed && event === "edit" && session.configResult.ok && session.configResult.config.scorecard) {
+						scorecardSession = session;
+						const uri = pathToFileURL(absoluteFilePath).href;
+						for (const { serverId } of matchServers(session.configResult.config, absoluteFilePath)) {
+							editedDocuments.set(JSON.stringify([serverId, uri]), { serverId, uri });
+						}
+					}
 					const result = await activate(session, absoluteFilePath, event);
 					if (result.kind === "ok") return result.formatted;
 					if (result.kind === "untrusted") return result.guidance;
@@ -95,8 +114,29 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 			},
 			logError,
 		});
+		pi.on("agent_settled", () => {
+			if (disposed || editedDocuments.size === 0) return undefined;
+			const documents = [...editedDocuments.values()];
+			editedDocuments.clear();
+			const session = scorecardSession;
+			if (!session?.configResult.ok || !session.configResult.config.scorecard) return undefined;
+			const currentVersions = documents.map(({ serverId, uri }) => {
+				const client = [...session.pool.entries()].find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+				return { serverId, uri, currentVersion: client?.documents.version(uri) };
+			});
+			const scorecard = computeScorecard({
+				store: session.diagnostics,
+				documents: currentVersions,
+				policy: session.configResult.config.diagnostics,
+			});
+			if (scorecard.documents.length > 0 && typeof scorecardPi.appendEntry === "function") {
+				scorecardPi.appendEntry({ customType: "lsp-scorecard", data: scorecard });
+			}
+			return undefined;
+		});
 		pi.on("session_shutdown", () => {
 			disposed = true;
+			editedDocuments.clear();
 			if (sessionPromise) {
 				void (async () => {
 					try {
