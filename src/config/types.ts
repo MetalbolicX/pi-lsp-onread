@@ -31,6 +31,7 @@ export interface ServerConfig {
 	requestTimeoutMs?: number;
 	retryCooldownMs?: number;
 	maxConsecutiveStartFailures?: number;
+	prewarm?: boolean;
 	diagnostics?: ServerDiagnosticsConfig;
 }
 

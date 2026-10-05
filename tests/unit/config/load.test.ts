@@ -36,6 +36,18 @@ describe("configuration loading", () => {
 		}
 	});
 
+	it("accepts boolean prewarm and rejects string prewarm", async () => {
+		const directory = await makeDirectory();
+		const validPath = join(directory, "valid.json");
+		await writeFile(validPath, JSON.stringify({ version: 1, lsp: { ts: { prewarm: true } } }), "utf8");
+		expect((await loadConfig(validPath)).status).toBe("loaded");
+		const invalidPath = join(directory, "invalid.json");
+		await writeFile(invalidPath, JSON.stringify({ version: 1, lsp: { ts: { prewarm: "yes" } } }), "utf8");
+		const invalid = await loadConfig(invalidPath);
+		expect(invalid.status).toBe("error");
+		if (invalid.status === "error") expect(invalid.errors.join(" ")).toMatch(/prewarm/);
+	});
+
 	it("validates source shape while allowing partial server overrides", () => {
 		expect(validateSourceConfig({ version: 1, lsp: { ts: { disabled: true } } }).ok).toBe(true);
 		const result = validateSourceConfig({ version: 1, unexpected: true });

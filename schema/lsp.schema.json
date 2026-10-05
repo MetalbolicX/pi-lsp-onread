@@ -99,6 +99,11 @@
 					"maximum": 100,
 					"description": "Consecutive failed starts before disabling the server for this session (default 3)."
 				},
+				"prewarm": {
+					"type": "boolean",
+					"default": false,
+					"description": "Start this server at session start for trusted projects (default false)."
+				},
 				"diagnostics": {
 					"$ref": "#/$defs/serverDiagnostics"
 				}

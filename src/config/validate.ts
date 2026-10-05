@@ -23,7 +23,10 @@ export function validateEffectiveConfig(value: unknown): EffectiveValidationResu
 				errors.push(`${path}: server configuration must be an object`);
 				continue;
 			}
-			const { disabled, command, extensions, languageId } = rawServer;
+			const { disabled, command, extensions, languageId, prewarm } = rawServer;
+			if (prewarm !== undefined && typeof prewarm !== "boolean") {
+				errors.push(`${path}/prewarm: must be a boolean`);
+			}
 			const lifecycleBounds: Record<string, { minimum: number; maximum?: number }> = {
 				initializeTimeoutMs: { minimum: 1, maximum: 600_000 },
 				requestTimeoutMs: { minimum: 1, maximum: 600_000 },

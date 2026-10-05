@@ -41,6 +41,14 @@ describe("configuration merging", () => {
 		}
 	});
 
+	it("layers prewarm and keeps omitted prewarm off", () => {
+		const config = mergeConfig(defaults, { lsp: { ts: { prewarm: true } } }, { lsp: { ts: { prewarm: false } } });
+		expect(config.lsp).toMatchObject({ ts: { prewarm: false } });
+		const omitted = mergeConfig(defaults, { lsp: { ts: {} } });
+		if (omitted.lsp === false) throw new Error("Expected server map");
+		expect("prewarm" in omitted.lsp.ts!).toBe(false);
+	});
+
 	it("keeps disabled servers as tombstones without requiring commands", () => {
 		const config = mergeConfig(defaults, { lsp: { ts: { command: ["ts"], extensions: [".ts"], languageId: "typescript" } } }, { lsp: { ts: { disabled: true } } });
 		expect(config.lsp).toMatchObject({ ts: { disabled: true } });
