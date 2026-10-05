@@ -265,6 +265,43 @@ export class RuntimeSession {
 		}
 	}
 
+	async codeActions(serverId: string, uri: string, range: { start: { line: number; character: number }; end: { line: number; character: number } }, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; actions: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.codeActionProvider) return { outcome: "unsupported", actions: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", actions: [] };
+			const response = await client.request<unknown>("textDocument/codeAction", { textDocument: { uri }, range }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", actions: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", actions: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", actions: [] };
+			return { outcome: "ok", actions: response.value.slice(0, 1000) };
+		} catch {
+			return { outcome: "failed", actions: [] };
+		}
+	}
+
+	async resolveCodeAction(serverId: string, action: unknown, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; action: unknown }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const provider = client?.capabilities()?.codeActionProvider;
+			if (!client || !provider || typeof provider !== "object" || Array.isArray(provider)
+				|| !(provider as { resolveProvider?: unknown }).resolveProvider) {
+				return { outcome: "unsupported", action: null };
+			}
+			if (timeoutMs <= 0) return { outcome: "failed", action: null };
+			const response = await client.request<unknown>("codeAction/resolve", action, timeoutMs);
+			if (!response.ok || response.value === null || response.value === undefined
+				|| typeof response.value !== "object" || Array.isArray(response.value)) {
+				return { outcome: "failed", action: null };
+			}
+			return { outcome: "ok", action: response.value };
+		} catch {
+			return { outcome: "failed", action: null };
+		}
+	}
+
 	async definition(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]

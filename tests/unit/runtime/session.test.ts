@@ -482,6 +482,138 @@ describe("RuntimeSession", () => {
 		finally { await session.dispose(); }
 	});
 
+	describe("codeActions requests", () => {
+		const range = { start: { line: -2, character: 19 }, end: { line: 3, character: -4 } };
+		const actions = [{ title: "Fix it", kind: "quickfix" }, { title: "Refactor" }];
+
+		async function setupRequest(value: unknown, requestOk = true) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			let args: unknown[] = [];
+			const client = {
+				capabilities: () => ({ codeActionProvider: true }),
+				request: async (...requestArgs: unknown[]) => { args = requestArgs; return requestOk ? { ok: true, value } : { ok: false }; },
+				documents: { version: () => undefined },
+			} as unknown as LspClient;
+			return { session, client, getArgs: () => args };
+		}
+
+		it("returns arrays and passes exact request params", async () => {
+			const { session, client, getArgs } = await setupRequest(actions);
+			try {
+				expect(await session.codeActions("fake", "file:///target.ts", range, 1234, client)).toEqual({ outcome: "ok", actions });
+				expect(getArgs()).toEqual(["textDocument/codeAction", { textDocument: { uri: "file:///target.ts" }, range }, 1234]);
+			} finally { await session.dispose(); }
+		});
+
+		it("treats null and undefined as no actions and caps arrays at 1000", async () => {
+			const { session, client } = await setupRequest(null);
+			const undefinedClient = { ...client, request: async () => ({ ok: true }) } as unknown as LspClient;
+			const manyClient = { ...client, request: async () => ({ ok: true, value: Array.from({ length: 1001 }, (_, index) => index) }) } as unknown as LspClient;
+			try {
+				expect(await session.codeActions("fake", "file:///target.ts", range, 1000, client)).toEqual({ outcome: "ok", actions: [] });
+				expect(await session.codeActions("fake", "file:///target.ts", range, 1000, undefinedClient)).toEqual({ outcome: "ok", actions: [] });
+				const capped = await session.codeActions("fake", "file:///target.ts", range, 1000, manyClient);
+				expect(capped.outcome).toBe("ok");
+				expect(capped.actions).toHaveLength(1000);
+				expect(capped.actions[999]).toBe(999);
+			} finally { await session.dispose(); }
+		});
+
+		it("returns unsupported without capability or a resolved client", async () => {
+			const { session, client } = await setupRequest([]);
+			const incapable = { ...client, capabilities: () => ({}) } as unknown as LspClient;
+			try {
+				expect(await session.codeActions("fake", "file:///target.ts", range, 1000, incapable)).toEqual({ outcome: "unsupported", actions: [] });
+				expect(await session.codeActions("missing", "file:///target.ts", range)).toEqual({ outcome: "unsupported", actions: [] });
+			} finally { await session.dispose(); }
+		});
+
+		it.each([
+			["request errors", async () => { throw new Error("request failed"); }],
+			["timeouts", async () => { throw new Error("timed out"); }],
+			["not-ok responses", async () => ({ ok: false })],
+			["non-array results", async () => ({ ok: true, value: { title: "not an array" } })],
+			["primitive results", async () => ({ ok: true, value: 42 })],
+		])("returns failed for %s", async (_label, request) => {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			const client = { capabilities: () => ({ codeActionProvider: true }), request, documents: { version: () => undefined } } as unknown as LspClient;
+			try { expect(await session.codeActions("fake", "file:///target.ts", range, 1000, client)).toEqual({ outcome: "failed", actions: [] }); }
+			finally { await session.dispose(); }
+		});
+
+		it("fails before requesting when timeout is non-positive", async () => {
+			const { session, client, getArgs } = await setupRequest(actions);
+			try {
+				expect(await session.codeActions("fake", "file:///target.ts", range, 0, client)).toEqual({ outcome: "failed", actions: [] });
+				expect(getArgs()).toEqual([]);
+			} finally { await session.dispose(); }
+		});
+	});
+
+	describe("resolveCodeAction requests", () => {
+		const action = { title: "Fix it", kind: "quickfix", data: { opaque: [1, 2] } };
+		const resolved = { ...action, edit: { changes: {} } };
+
+		async function setupRequest(value: unknown, requestOk = true) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			let args: unknown[] = [];
+			const client = {
+				capabilities: () => ({ codeActionProvider: { resolveProvider: true } }),
+				request: async (...requestArgs: unknown[]) => { args = requestArgs; return requestOk ? { ok: true, value } : { ok: false }; },
+				documents: { version: () => undefined },
+			} as unknown as LspClient;
+			return { session, client, getArgs: () => args };
+		}
+
+		it("returns an object and passes the exact action params", async () => {
+			const { session, client, getArgs } = await setupRequest(resolved);
+			try {
+				expect(await session.resolveCodeAction("fake", action, 1234, client)).toEqual({ outcome: "ok", action: resolved });
+				expect(getArgs()).toEqual(["codeAction/resolve", action, 1234]);
+			} finally { await session.dispose(); }
+		});
+
+		it("returns unsupported without a client or resolve capability", async () => {
+			const { session, client } = await setupRequest(resolved);
+			const noResolve = { ...client, capabilities: () => ({ codeActionProvider: { resolveProvider: false } }) } as unknown as LspClient;
+			const nonObjectProvider = { ...client, capabilities: () => ({ codeActionProvider: true }) } as unknown as LspClient;
+			const nullProvider = { ...client, capabilities: () => ({ codeActionProvider: null }) } as unknown as LspClient;
+			try {
+				for (const incapable of [noResolve, nonObjectProvider, nullProvider]) {
+					expect(await session.resolveCodeAction("fake", action, 1000, incapable)).toEqual({ outcome: "unsupported", action: null });
+				}
+				expect(await session.resolveCodeAction("missing", action)).toEqual({ outcome: "unsupported", action: null });
+			} finally { await session.dispose(); }
+		});
+
+		it.each([
+			["request errors", async () => { throw new Error("request failed"); }],
+			["timeouts", async () => { throw new Error("timed out"); }],
+			["not-ok responses", async () => ({ ok: false })],
+			["null results", async () => ({ ok: true, value: null })],
+			["undefined results", async () => ({ ok: true })],
+			["primitive results", async () => ({ ok: true, value: 42 })],
+			["array results", async () => ({ ok: true, value: [] })],
+		])("returns failed for %s", async (_label, request) => {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			const client = { capabilities: () => ({ codeActionProvider: { resolveProvider: true } }), request, documents: { version: () => undefined } } as unknown as LspClient;
+			try { expect(await session.resolveCodeAction("fake", action, 1000, client)).toEqual({ outcome: "failed", action: null }); }
+			finally { await session.dispose(); }
+		});
+
+		it("fails before requesting when timeout is non-positive", async () => {
+			const { session, client, getArgs } = await setupRequest(resolved);
+			try {
+				expect(await session.resolveCodeAction("fake", action, 0, client)).toEqual({ outcome: "failed", action: null });
+				expect(getArgs()).toEqual([]);
+			} finally { await session.dispose(); }
+		});
+	});
+
 	it("loads its trust store once and exposes deterministic pool keys", async () => {
 		const { projectRoot, trustStorePath } = await setup();
 		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
