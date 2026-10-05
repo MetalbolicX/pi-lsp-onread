@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { buildEffectiveConfig } from "./config/index.js";
 import { activate } from "./runtime/activation.js";
+import { prewarmServers } from "./runtime/prewarm.js";
 import { RuntimeSession } from "./runtime/session.js";
 import { createHookBindings } from "./pi/hooks.js";
 import { registerLspDiagnosticsTool } from "./pi/lsp-diagnostics-tool.js";
@@ -48,6 +49,18 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 		if (typeof pi.registerTool === "function") registerLspFormattingTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspSymbolsTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspWorkspaceSymbolsTool(pi, getSession);
+		pi.on("session_start", (_event, ctx) => {
+			if (disposed) return;
+			void (async () => {
+				try {
+					const session = await getSession(ctx.cwd);
+					if (disposed) return;
+					await prewarmServers(session, { canonicalRoot: ctx.cwd, logError });
+				} catch (error) {
+					logError("pi-lsp-onread: prewarm failed", error);
+				}
+			})();
+		});
 		createHookBindings(pi, {
 			activate: async (absoluteFilePath, event, projectRoot) => {
 				if (disposed) return undefined;
