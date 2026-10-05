@@ -77,10 +77,14 @@ async function runRename(params: { path: string; line: number; character: number
 			for (const { serverId, prepare } of prepared) {
 				const value = isRecord(prepare) ? prepare : {};
 				const placeholder = typeof value.placeholder === "string" ? value.placeholder : "";
-				const range = isRecord(value.range) && isRecord(value.range.start) && isRecord(value.range.end)
-					&& isCoordinate(value.range.start.line) && isCoordinate(value.range.start.character)
-					&& isCoordinate(value.range.end.line) && isCoordinate(value.range.end.character)
-					? value.range as { start: { line: number; character: number }; end: { line: number; character: number } }
+				const bareRange = isRecord(prepare) && isRecord(prepare.start) && isRecord(prepare.end)
+					&& isCoordinate(prepare.start.line) && isCoordinate(prepare.start.character)
+					&& isCoordinate(prepare.end.line) && isCoordinate(prepare.end.character);
+				const rangeValue = bareRange ? prepare : value.range;
+				const range = isRecord(rangeValue) && isRecord(rangeValue.start) && isRecord(rangeValue.end)
+					&& isCoordinate(rangeValue.start.line) && isCoordinate(rangeValue.start.character)
+					&& isCoordinate(rangeValue.end.line) && isCoordinate(rangeValue.end.character)
+					? rangeValue as { start: { line: number; character: number }; end: { line: number; character: number } }
 					: undefined;
 				const at = range ? ` at L${range.start.line + 1}:C${range.start.character + 1}-L${range.end.line + 1}:C${range.end.character + 1}` : "";
 				lines.push(`${serverId}: ready to rename${placeholder ? ` "${placeholder}"` : ""}${at}.`);

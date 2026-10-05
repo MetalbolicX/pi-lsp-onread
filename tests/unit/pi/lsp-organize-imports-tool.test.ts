@@ -27,7 +27,7 @@ afterEach(async () => {
 	await Promise.all(projects.splice(0).map(removeProject));
 });
 
-async function setup(options: { trusted?: boolean; codeActions?: boolean } = {}) {
+async function setup(options: { trusted?: boolean; codeActions?: boolean; variants?: string } = {}) {
 	const project = await createProject(options.trusted ?? true);
 	projects.push(project.projectRoot);
 	const session = await RuntimeSession.create({
@@ -35,6 +35,9 @@ async function setup(options: { trusted?: boolean; codeActions?: boolean } = {})
 		projectRoot: project.projectRoot,
 		trustStorePath: project.trustStorePath,
 	});
+	if (session.configResult.ok && session.configResult.config.lsp !== false && options.variants) {
+		session.configResult.config.lsp.fake!.env = { ...session.configResult.config.lsp.fake!.env, FAKE_ORGANIZE_IMPORTS_VARIANTS: options.variants };
+	}
 	sessions.push(session);
 	const pi = fakePiApi();
 	createExtension({ createSession: vi.fn(async () => session) as never })(pi as never);
@@ -70,6 +73,19 @@ describe("LSP organize imports tool", () => {
 		expect(output).toContain(footer);
 		const outputLines = output.split("\n");
 		expect(outputLines.some((line) => line.startsWith("+ // organized line 0"))).toBe(true);
+	});
+
+	it("prefers an exact organize-imports kind over prefixed siblings", async () => {
+		const { filePath, projectRoot, tool } = await setup({ codeActions: true, variants: "exact-and-prefix" });
+		const output = await execute(tool, filePath, projectRoot);
+		expect(output).toContain("+ // exact organize imports");
+		expect(output).not.toContain("additional organize-imports action(s) not shown.");
+	});
+
+	it("reports omitted additional prefix-matching organize-imports actions", async () => {
+		const { filePath, projectRoot, tool } = await setup({ codeActions: true, variants: "prefix-only" });
+		const output = await execute(tool, filePath, projectRoot);
+		expect(output.split("\n")).toContain("fake: 1 additional organize-imports action(s) not shown.");
 	});
 
 	it("reports when a server has no organize-imports action", async () => {

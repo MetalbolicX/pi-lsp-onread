@@ -14,7 +14,7 @@ afterEach(async () => {
 	await Promise.all(sessions.splice(0).map((session) => session.dispose()));
 	await Promise.all(projects.splice(0).map(removeProject));
 });
-async function setup(options: { trusted?: boolean; rename?: boolean; renameBoolean?: boolean; overlapping?: boolean } = {}) {
+async function setup(options: { trusted?: boolean; rename?: boolean; renameBoolean?: boolean; overlapping?: boolean; prepareBareRange?: boolean } = {}) {
 	const project = await createProject(options.trusted ?? true);
 	projects.push(project.projectRoot);
 	const config = fakeConfig();
@@ -23,6 +23,7 @@ async function setup(options: { trusted?: boolean; rename?: boolean; renameBoole
 		...(options.rename ? { FAKE_RENAME: "1" } : {}),
 		...(options.renameBoolean ? { FAKE_RENAME_BOOLEAN: "1" } : {}),
 		...(options.overlapping ? { FAKE_OVERLAPPING_RENAME: "1" } : {}),
+		...(options.prepareBareRange ? { FAKE_PREPARE_BARE_RANGE: "1" } : {}),
 	};
 	const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath });
 	sessions.push(session);
@@ -63,6 +64,11 @@ describe("LSP rename tool", () => {
 		const booleanProvider = await setup({ renameBoolean: true });
 		const unsupported = await execute(booleanProvider.tool, booleanProvider.filePath, booleanProvider.projectRoot, { mode: "prepare" });
 		expect(unsupported.split("\n")).toEqual(["fake does not support prepareRename (plain rename may still be available).", "No matched language server offers prepareRename for this position.", prepareFooter]);
+	});
+	it("renders a bare Range prepare result as an at-clause without a placeholder", async () => {
+		const value = await setup({ rename: true, prepareBareRange: true });
+		const ready = await execute(value.tool, value.filePath, value.projectRoot, { mode: "prepare" });
+		expect(ready.split("\n")).toEqual([`fake: ready to rename at L1:C1-L1:C14.`, prepareFooter]);
 	});
 	it("previews multi-file rename edits and rejects overlapping edits", async () => {
 		const value = await setup({ rename: true });

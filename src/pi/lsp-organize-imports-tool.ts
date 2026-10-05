@@ -50,6 +50,7 @@ async function runOrganizeImports(params: { path: string }, ctx: ExtensionToolCo
 		const failures: string[] = [];
 		const unsupported: string[] = [];
 		const noActions: string[] = [];
+		const omissions: string[] = [];
 		const candidates: Candidate[] = [];
 		const config = session.configResult.ok ? session.configResult.config : undefined;
 		for (const serverId of result.matchedServers) {
@@ -60,9 +61,15 @@ async function runOrganizeImports(params: { path: string }, ctx: ExtensionToolCo
 			if (response.outcome === "failed") failures.push(`failed to retrieve code actions from ${serverId}`);
 			else if (response.outcome === "unsupported") unsupported.push(`${serverId} does not support code actions`);
 			else {
-				const action = (response.actions as Action[]).find((item) => typeof item.kind === "string" && item.kind.startsWith("source.organizeImports"));
+				const actions = response.actions as Action[];
+				const exact = actions.find((item) => item.kind === "source.organizeImports");
+				const prefixMatches = actions.filter((item) => typeof item.kind === "string" && item.kind.startsWith("source.organizeImports"));
+				const action = exact ?? prefixMatches[0];
 				if (!action) noActions.push(`${serverId} reported no organize-imports action.`);
-				else candidates.push({ serverId, action, ...(client ? { client } : {}), timeoutMs });
+				else {
+					if (!exact && prefixMatches.length > 1) omissions.push(`${serverId}: ${prefixMatches.length - 1} additional organize-imports action(s) not shown.`);
+					candidates.push({ serverId, action, ...(client ? { client } : {}), timeoutMs });
+				}
 			}
 		}
 
@@ -72,7 +79,7 @@ async function runOrganizeImports(params: { path: string }, ctx: ExtensionToolCo
 				return content.length <= MAX_READ_CHARS ? content : undefined;
 			} catch { return undefined; }
 		};
-		const diagnostics = [...failures, ...unsupported, ...noActions];
+		const diagnostics = [...failures, ...unsupported, ...noActions, ...omissions];
 		const previews: Array<{ serverId: string; validation: ValidationOk }> = [];
 		for (const candidate of candidates) {
 			const { serverId, client, timeoutMs, action: initialAction } = candidate;
