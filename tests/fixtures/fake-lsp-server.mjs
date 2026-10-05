@@ -11,6 +11,7 @@ const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
 const rename = process.env.FAKE_RENAME === "1";
+const formatting = process.env.FAKE_FORMATTING === "1";
 const renameBoolean = process.env.FAKE_RENAME_BOOLEAN === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
@@ -116,6 +117,7 @@ function handle(message) {
 		capabilities.inlayHintProvider = true;
 		if (codeActions) capabilities.codeActionProvider = { resolveProvider: true };
 		if (rename) capabilities.renameProvider = { prepareProvider: true };
+		if (formatting) capabilities.documentFormattingProvider = true;
 		if (renameBoolean) capabilities.renameProvider = true;
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
@@ -135,6 +137,19 @@ function handle(message) {
 	} else if (message.method === "textDocument/didClose") {
 		documents.delete(message.params.textDocument.uri);
 		lastResultIds.delete(message.params.textDocument.uri);
+	} else if (message.method === "textDocument/formatting" && formatting) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { tabSize, insertSpaces } = message.params.options;
+		const edits = process.env.FAKE_OVERLAPPING_FORMATTING === "1"
+			? [
+				{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, newText: `formatted with tabSize ${tabSize}` },
+				{ range: { start: { line: 0, character: 3 }, end: { line: 0, character: 7 } }, newText: `formatted with tabSize ${tabSize}, insertSpaces ${insertSpaces}` },
+			]
+			: [
+				{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, newText: `formatted with tabSize ${tabSize}` },
+				{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } }, newText: `formatted with tabSize ${tabSize}, insertSpaces ${insertSpaces}\n` },
+			];
+		send({ jsonrpc: "2.0", id: message.id, result: edits });
 	} else if (message.method === "textDocument/diagnostic" && pullDiagnostics) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const { uri } = message.params.textDocument;

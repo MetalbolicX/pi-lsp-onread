@@ -718,6 +718,48 @@ describe("RuntimeSession", () => {
 		});
 	});
 
+	describe("formatting requests", () => {
+		async function makeSession(capabilities: Record<string, unknown>, request: (...args: unknown[]) => Promise<unknown>) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			let args: unknown[] = [];
+			const client = { capabilities: () => capabilities, request: async (...received: unknown[]) => { args = received; return request(...received); }, documents: { version: () => undefined } } as unknown as LspClient;
+			return { session, client, getArgs: () => args };
+		}
+		const uri = "file:///format.ts";
+		const options = { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true };
+
+		it("passes formatting options and clamps edits to 1000", async () => {
+			const edits = Array.from({ length: 1001 }, (_, index) => ({ index }));
+			const { session, client, getArgs } = await makeSession({ documentFormattingProvider: true }, async () => ({ ok: true, value: edits }));
+			try {
+				const result = await session.formatting("fake", uri, options, 1234, client);
+				expect(result.outcome).toBe("ok");
+				expect(result.edits).toHaveLength(1000);
+				expect(result.edits[999]).toEqual(edits[999]);
+				expect(getArgs()).toEqual(["textDocument/formatting", { textDocument: { uri }, options }, 1234]);
+			} finally { await session.dispose(); }
+		});
+
+		it("treats a null response as no formatting changes", async () => {
+			const { session, client } = await makeSession({ documentFormattingProvider: {} }, async () => ({ ok: true, value: null }));
+			try { expect(await session.formatting("fake", uri, options, 1000, client)).toEqual({ outcome: "ok", edits: [] }); }
+			finally { await session.dispose(); }
+		});
+
+		it("returns unsupported without the formatting capability", async () => {
+			const { session, client } = await makeSession({}, async () => ({ ok: true, value: [] }));
+			try { expect(await session.formatting("fake", uri, options, 1000, client)).toEqual({ outcome: "unsupported", edits: [] }); }
+			finally { await session.dispose(); }
+		});
+
+		it("returns failed when the formatting request throws", async () => {
+			const { session, client } = await makeSession({ documentFormattingProvider: true }, async () => { throw new Error("request failed"); });
+			try { expect(await session.formatting("fake", uri, options, 1000, client)).toEqual({ outcome: "failed", edits: [] }); }
+			finally { await session.dispose(); }
+		});
+	});
+
 	describe("rename requests", () => {
 		async function makeSession(capabilities: Record<string, unknown>, request: (...args: unknown[]) => Promise<unknown>) {
 			const { projectRoot, trustStorePath } = await setup();

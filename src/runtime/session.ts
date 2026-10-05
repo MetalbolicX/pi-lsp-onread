@@ -382,6 +382,24 @@ export class RuntimeSession {
 		}
 	}
 
+	/** Request formatting edits for a document using the supplied formatting options. */
+	async formatting(serverId: string, uri: string, options: { tabSize: number; insertSpaces: boolean; trimTrailingWhitespace?: boolean; insertFinalNewline?: boolean; trimFinalNewlines?: boolean }, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; edits: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.documentFormattingProvider) return { outcome: "unsupported", edits: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", edits: [] };
+			const response = await client.request<unknown>("textDocument/formatting", {
+				textDocument: { uri },
+				options,
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", edits: [] };
+			return { outcome: "ok", edits: Array.isArray(response.value) ? response.value.slice(0, 1000) : [] };
+		} catch {
+			return { outcome: "failed", edits: [] };
+		}
+	}
+
 	/** Request inlay hints for a document line range. */
 	async inlayHints(serverId: string, uri: string, startLine: number, endLine: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hints: unknown[] }> {
 		try {
