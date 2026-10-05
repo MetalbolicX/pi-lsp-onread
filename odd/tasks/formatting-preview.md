@@ -20,10 +20,20 @@
 | F0 | _branch_ | from `feature/rename-preview` @ `15007a7` |
 | F1 | `aff60cc` | feat(tools): add lsp_formatting tool |
 | F2 | `985412f` | docs: document lsp_formatting tool |
-| F3 | _pending_ | closure + review record |
+| F3 | `c67bdfa` | docs: record formatting-preview closure evidence |
+
+Review-record commit: follows as `docs: record formatting-preview review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (F3)
 
 - `pnpm test`: 42 files / 404 tests passed (gentle-ai-verify; baseline 41/392 → +1 file / +12 tests). Post-run mutation check clean.
 - `pnpm lint`: zero findings. `pnpm typecheck`: exit 0. `pnpm build`: rolldown success (extension.js 717.04 kB).
 - TDD RED observed (12 focused failures across runtime + tool) before GREEN; line-structure assertions for output including the echoed options footer.
+
+## Review record
+
+- ASSESS (committed range, base `15007a76b8fdbef5b2e1a760961861d3edfc4bf4` = branch base, committedOnly): medium risk, executable change (`src/extension.ts`), 8 paths / 345 lines, reviewDue = `under_budget`.
+- One stale consent binding, then START with explicit full branch-base created lineage `review-09de04a8ca266a98` (medium, review-reliability).
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-001 — `src/runtime/session.ts:395` (WARNING; recurring session.ts advisory family — hardening pass)
