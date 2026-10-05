@@ -9,6 +9,7 @@ const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
 const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
+const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
 
@@ -109,6 +110,7 @@ function handle(message) {
 			capabilities.definitionProvider = true;
 			capabilities.referencesProvider = true;
 		}
+		if (codeActions) capabilities.codeActionProvider = { resolveProvider: true };
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
@@ -184,6 +186,53 @@ function handle(message) {
 		}).filter(({ name }) => name.toLowerCase().includes(query.toLowerCase()))
 			.sort((a, b) => a.name.localeCompare(b.name) || a.location.uri.localeCompare(b.location.uri));
 		send({ jsonrpc: "2.0", id: message.id, result: entries });
+	} else if (message.method === "textDocument/codeAction" && codeActions) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const { text } = documents.get(uri) ?? {};
+		const { range } = message.params;
+		const { start } = range ?? {};
+		if (text === undefined || text === "" || !range || typeof range !== "object" || !start || typeof start !== "object") {
+			send({ jsonrpc: "2.0", id: message.id, result: null });
+			return;
+		}
+		const { line: requestedLine } = start;
+		const line = Math.min(Number.isInteger(requestedLine) && requestedLine >= 0 ? requestedLine : 0, text.split("\n").length - 1);
+		const point = { line, character: 0 };
+		const actions = [
+			{
+				title: "Fix thing (quickfix)",
+				kind: "quickfix",
+				edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: `// fixed line ${line}\n` }] } },
+			},
+			{
+				title: "Organize imports (needs resolve)",
+				kind: "source.organizeImports",
+				data: { uri, line },
+			},
+			{
+				title: "Do fake thing (command only)",
+				kind: "quickfix",
+				command: { title: "Do fake thing", command: "fake.doThing", arguments: [uri] },
+			},
+		];
+		send({ jsonrpc: "2.0", id: message.id, result: actions });
+	} else if (message.method === "codeAction/resolve" && codeActions) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const action = message.params;
+		if (Object.hasOwn(action, "edit")) {
+			send({ jsonrpc: "2.0", id: message.id, result: action });
+		} else if (action.data && typeof action.data === "object" && typeof action.data.uri === "string" && Number.isFinite(action.data.line)) {
+			const { uri, line } = action.data;
+			const point = { line, character: 0 };
+			const result = {
+				...action,
+				edit: { changes: { [uri]: [{ range: { start: point, end: point }, newText: `// organized line ${line}\n` }] } },
+			};
+			send({ jsonrpc: "2.0", id: message.id, result });
+		} else {
+			send({ jsonrpc: "2.0", id: message.id, result: null });
+		}
 	} else if (message.method === "workspace/diagnostic" && workspaceDiagnostics) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const previousResultIds = message.params?.previousResultIds ?? {};
