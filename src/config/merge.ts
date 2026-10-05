@@ -36,7 +36,7 @@ function mergeLayerServers(
 	return result;
 }
 
-export type ConfigLayer = Pick<SourceConfig, "lsp" | "diagnostics">;
+export type ConfigLayer = Pick<SourceConfig, "lsp" | "diagnostics" | "scorecard">;
 
 export function mergeConfig(defaults: ConfigLayer, global: ConfigLayer = {}, project: ConfigLayer = {}): MergedConfig {
 	const servers: Record<string, ServerConfig> = {};
@@ -62,5 +62,10 @@ export function mergeConfig(defaults: ConfigLayer, global: ConfigLayer = {}, pro
 		}]),
 	);
 
-	return { version: 1, lsp: withInheritedDiagnostics, diagnostics };
+	return {
+		version: 1,
+		scorecard: project.scorecard ?? global.scorecard ?? defaults.scorecard,
+		lsp: withInheritedDiagnostics,
+		diagnostics,
+	};
 }

@@ -14,6 +14,10 @@
 			"const": 1,
 			"description": "Configuration contract version."
 		},
+		"scorecard": {
+			"type": "boolean",
+			"description": "Append a bounded diagnostic scorecard at the end of edited turns (default false)."
+		},
 		"lsp": {
 			"description": "Map of server id to server definition, or false to disable every LSP server. No servers are enabled by default; activation happens on the first matching read/edit/write.",
 			"oneOf": [

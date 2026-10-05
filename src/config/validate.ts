@@ -11,6 +11,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export function validateEffectiveConfig(value: unknown): EffectiveValidationResult {
 	const errors: string[] = [];
 	if (!isObject(value)) return { ok: false, errors: ["/: merged configuration must be an object"] };
+	if (value.scorecard !== undefined && typeof value.scorecard !== "boolean") {
+		errors.push("/scorecard: must be a boolean");
+	}
 	const rawLsp = value.lsp;
 	if (rawLsp !== false && !isObject(rawLsp)) {
 		return { ok: false, errors: ["/lsp: merged server map must be an object or false"] };

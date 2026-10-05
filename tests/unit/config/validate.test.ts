@@ -24,6 +24,12 @@ describe("merged configuration validation", () => {
 		if (!result.ok) expect(result.errors.join(" ")).toMatch(/\.js.*unknown|unknown.*\.js/i);
 	});
 
+	it("rejects non-boolean top-level scorecard", () => {
+		const result = validateEffectiveConfig({ version: 1, lsp: false, scorecard: "yes" });
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.errors).toContain("/scorecard: must be a boolean");
+	});
+
 	it("rejects non-boolean prewarm with its server field path", () => {
 		const result = validateEffectiveConfig({ version: 1, lsp: {
 			myServer: { command: ["server"], extensions: [".ts"], languageId: "typescript", prewarm: "yes" },

@@ -37,6 +37,7 @@ export interface ServerConfig {
 
 export interface SourceConfig {
 	version: 1;
+	scorecard?: boolean;
 	lsp?: false | Record<string, ServerConfig>;
 	diagnostics?: DiagnosticsConfig;
 	"$schema"?: string;
@@ -63,6 +64,7 @@ export type EffectiveServerConfig =
 
 export interface EffectiveConfig {
 	version: 1;
+	scorecard?: boolean;
 	lsp: false | Record<string, EffectiveServerConfig>;
 	diagnostics: DiagnosticsPolicy;
 }
@@ -71,6 +73,7 @@ export interface MergedServerConfig extends ServerConfig {}
 
 export interface MergedConfig {
 	version: 1;
+	scorecard?: boolean;
 	lsp: false | Record<string, MergedServerConfig>;
 	diagnostics: DiagnosticsConfig;
 }

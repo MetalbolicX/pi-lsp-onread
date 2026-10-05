@@ -41,6 +41,12 @@ describe("configuration merging", () => {
 		}
 	});
 
+	it("layers scorecard and keeps omitted scorecard off", () => {
+		expect(mergeConfig(defaults, { scorecard: true }, { scorecard: false }).scorecard).toBe(false);
+		expect(mergeConfig(defaults, {}, { scorecard: true }).scorecard).toBe(true);
+		expect(mergeConfig(defaults).scorecard).toBeUndefined();
+	});
+
 	it("layers prewarm and keeps omitted prewarm off", () => {
 		const config = mergeConfig(defaults, { lsp: { ts: { prewarm: true } } }, { lsp: { ts: { prewarm: false } } });
 		expect(config.lsp).toMatchObject({ ts: { prewarm: false } });
