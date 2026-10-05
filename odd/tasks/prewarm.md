@@ -1,0 +1,111 @@
+# Feature: prewarm
+
+Roadmap **T3.1** — the first Tier 3 slice. Tier 2 (nine AI-facing tools) and the
+foundation hardening pass are complete and merged to `main`.
+
+## Objective
+
+Optionally start configured LSP servers in the background at Pi `session_start`,
+before the first AI tool call, so an explicitly opted-in project skips cold-start
+latency on its first `read`/`edit`-driven activation. Default **off**; per-server
+opt-in; trust-checked; reuses the existing demand-driven activation machinery
+without changing its semantics.
+
+## Authority
+
+Roadmap tier 3 item 1 (memory obs 11426): "explicitly configured trust-checked
+prewarm default off after lifecycle validation". The lifecycle precondition is
+satisfied (`graceful-degradation`: dead transports, shutdown races, coalescing,
+three-strike disable; `hardening-pass`: shared client lookup). User authorized
+Tier 3 work ("Start working on T3") on 2026-10-05.
+
+## Resolved design decisions
+
+1. **Kick point**: `pi.on("session_start", ...)` in `src/extension.ts`. Pi's
+   extension docs: "Do not start processes ... in the factory"; "Start
+   long-lived resources from `session_start`". Fire-and-forget, errors logged
+   via `logError`, gated by `disposed`.
+2. **Which servers**: every enabled server in the effective config whose
+   `prewarm === true`, for the canonicalized `ctx.cwd` root. A server config
+   with `prewarm: true` is an explicit user statement of intent for that
+   project's config file.
+3. **Trust**: canonicalize the root and run the same `authorize` gate as
+   `activate()` (`src/runtime/activation.ts:31-35`). Untrusted → no start,
+   nothing surfaced (log only). Never bypasses or widens trust.
+4. **Reuse, not redesign**: start = `session.getOrCreateClient(serverId,
+   canonicalRoot)` + `client.ensure()` + `recordStartFailure/Success` —
+   mirroring `activation.ts:58-80`. Cooldown, three-strike, and coalescing
+   (pendingClients) come free. `activate()` edit-deadline semantics untouched.
+5. **Default off**: absent or `false` `prewarm` spawns nothing (regression
+   tested). No config watching / hot reload (non-goal family-wide).
+6. **No documents opened**: prewarm performs initialize only; document
+   syncing stays demand-driven.
+7. **Config surface**: `prewarm?: boolean` beside the four lifecycle ints
+   (`ServerConfig`); schema `$defs.server` gains `{type:"boolean"}` (the object
+   is `additionalProperties:false`, so schema MUST be extended); merged by the
+   generic scalar merge (no merge.ts change); validated as boolean with error
+   path `/lsp/<id>/prewarm`, never clamped.
+
+## Tasks
+
+### P1 — Config surface: schema, types, validate, docs (test-first)
+- [ ] RED: config with `prewarm` rejected today (schema unknown-prop path);
+      non-boolean values accepted today
+- [ ] GREEN: `schema/lsp.schema.json` `$defs.server` `prewarm` boolean;
+      `ServerConfig.prewarm?: boolean`; `validateEffectiveConfig` boolean
+      check (error `/lsp/<id>/prewarm`); merge layering + omitted-keeps-off
+      regression; load accepts valid, rejects `"yes"`
+- [ ] README lifecycle-settings section documents `prewarm` (default `false`)
+- Route: delegated (gentle-ai-worker).
+
+### P2 — Runtime prewarm primitive (test-first)
+- [ ] RED: no prewarm primitive exists
+- [ ] GREEN: `src/runtime/prewarm.ts` — `prewarmServers(session, {canonicalRoot, logError})`:
+      iterates enabled servers with `prewarm === true`, trust-checks, starts in
+      background, records start failure/success per pool key; already-started /
+      pending / disabled / cooling-down servers are no-ops (idempotent)
+- [ ] RED→GREEN tests (`tests/unit/runtime/prewarm.test.ts`): default off
+      spawns nothing; untrusted spawns nothing; enabled+trusted starts and a
+      concurrent demand activation coalesces to one startup (`calls() === 1`);
+      failure counts once and honors cooldown; repeated invocation does not
+      double-start
+- Route: delegated (gentle-ai-worker).
+
+### P3 — Extension wiring (test-first)
+- [ ] RED: session_start does not trigger prewarm
+- [ ] GREEN: `session_start` handler fires `prewarmServers` fire-and-forget
+      with `ctx.cwd`, gated by `disposed`; handler errors logged, never thrown;
+      `session_shutdown` keeps disposing late starts
+- [ ] Checks: typecheck, lint, full test suite, build, `git diff --check`
+- Route: delegated (gentle-ai-worker).
+
+## Non-goals
+
+- T3.2 turn-end scorecard; T3.3 tool_call preflight (separate features).
+- Config file watching / hot reload; automatic prewarm without explicit
+  per-server opt-in; opening documents at session start; pull-diagnostics
+  negotiation; changes to trust semantics; changes to activation deadlines.
+
+## Constraints
+
+- Baseline: `main` @ `4e94181`; 409 tests / 42 files green.
+- Branch `feature/prewarm` off `main` before the first write (created).
+- Test-first per task (RED observed before GREEN); record evidence below.
+- Per-task work-unit commit (Conventional Commit), commit identity recorded
+  here; ~400 authored changed lines advisory.
+- Workers never commit; parent reviews hunks, verifies via `gentle-ai-verify`,
+  and makes work-unit commits.
+- RDD: assess per work-unit commit; slice review at close with explicit
+  committed base range (branch base = `main` @ `4e94181` full SHA).
+- Merge/push/PR remain user decisions.
+
+## Progress log
+
+- 2026-10-05: authorized ("Start working on T3"). Design inputs scouted
+  (config flow, activation/ensure structure, extension startup, test
+  conventions); kick timing resolved against Pi extension docs
+  (`session_start`). Branch created. P1 delegated.
+
+## Review record
+
+- (pending)
