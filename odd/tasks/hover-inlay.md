@@ -25,7 +25,9 @@ Non-goals: hover/inlay `resolve` requests (e.g. tooltip resolution), markdown sa
 | O0 | _branch_ | from `feature/organize-imports-preview` @ `d1532aa` |
 | O1 | `f693bd1` | feat(tools): add lsp_hover and lsp_inlay_hints tools |
 | O2 | `88a5b18` | docs: document lsp_hover and lsp_inlay_hints tools |
-| O3 | _pending_ | closure + review record |
+| O3 | `a782ece` | docs: record hover-inlay closure evidence |
+
+Review-record commit: follows as `docs: record hover-inlay review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (O3)
 
@@ -36,4 +38,8 @@ Non-goals: hover/inlay `resolve` requests (e.g. tooltip resolution), markdown sa
 
 ## Review record
 
-- _pending at close (O3)._
+- ASSESS (committed range, base `d1532aa52ba45a4f7008afb880fbdb17bd450006` = branch base, committedOnly): medium risk, executable change (`src/extension.ts`), 14 paths / 623 lines, reviewDue = `slice_budget_reached`.
+- START with explicit full branch-base created lineage `review-e5b1210c499f2b29` (medium, review-reliability).
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-001 — `src/runtime/session.ts:358` (WARNING)
