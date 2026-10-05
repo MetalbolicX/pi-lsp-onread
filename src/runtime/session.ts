@@ -322,6 +322,46 @@ export class RuntimeSession {
 		}
 	}
 
+	/** Request hover information at a document position. */
+	async hover(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hover: unknown }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const provider = client?.capabilities()?.hoverProvider;
+			if (!client || !provider) return { outcome: "unsupported", hover: null };
+			if (timeoutMs <= 0) return { outcome: "failed", hover: null };
+			const response = await client.request<unknown>("textDocument/hover", {
+				textDocument: { uri },
+				position: { line, character },
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", hover: null };
+			return { outcome: "ok", hover: response.value && typeof response.value === "object" ? response.value : null };
+		} catch {
+			return { outcome: "failed", hover: null };
+		}
+	}
+
+	/** Request inlay hints for a document line range. */
+	async inlayHints(serverId: string, uri: string, startLine: number, endLine: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hints: unknown[] }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const provider = client?.capabilities()?.inlayHintProvider;
+			const supported = provider === true || (Array.isArray(provider) ? provider.length > 0 : Boolean(provider && typeof provider === "object"));
+			if (!client || !supported) return { outcome: "unsupported", hints: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", hints: [] };
+			const response = await client.request<unknown>("textDocument/inlayHint", {
+				textDocument: { uri },
+				range: { start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 } },
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", hints: [] };
+			if (!Array.isArray(response.value)) return { outcome: "ok", hints: [] };
+			return { outcome: "ok", hints: response.value.slice(0, 1000) };
+		} catch {
+			return { outcome: "failed", hints: [] };
+		}
+	}
+
 	async references(serverId: string, uri: string, line: number, character: number, includeDeclaration: boolean, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
 		try {
 			const client = suppliedClient ?? [...this.pool.entries()]

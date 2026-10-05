@@ -110,6 +110,8 @@ function handle(message) {
 			capabilities.definitionProvider = true;
 			capabilities.referencesProvider = true;
 		}
+		capabilities.hoverProvider = true;
+		capabilities.inlayHintProvider = true;
 		if (codeActions) capabilities.codeActionProvider = { resolveProvider: true };
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
@@ -169,6 +171,26 @@ function handle(message) {
 			range: { start: { line: index, character: 0 }, end: { line: index, character: content.length } },
 		}));
 		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/hover") {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const { line, character } = message.params.position ?? {};
+		const document = documents.get(uri);
+		const result = document && line === 0 && character === 0
+			? { contents: { kind: "markdown", value: "**fixture hover**" }, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } } }
+			: null;
+		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/inlayHint") {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const { start, end } = message.params.range ?? {};
+		const document = documents.get(uri);
+		const hints = document ? [
+			{ position: { line: 0, character: 5 }, kind: 1, label: "string" },
+			{ position: { line: 0, character: 8 }, kind: 2, label: "argument" },
+			...(document.text.split("\n").length > 1 ? [{ position: { line: 1, character: 0 }, label: [{ value: " -> " }, { text: "result" }] }] : []),
+		].filter(({ position }) => start && end && position.line >= start.line && position.line < end.line) : [];
+		send({ jsonrpc: "2.0", id: message.id, result: hints });
 	} else if (message.method === "textDocument/documentSymbol" && documentSymbols) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const text = documents.get(message.params.textDocument.uri)?.text;

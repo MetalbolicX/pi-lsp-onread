@@ -645,4 +645,76 @@ describe("RuntimeSession", () => {
 			await session.dispose();
 		}
 	});
+
+	describe("hover requests", () => {
+		async function makeSession(capabilities: Record<string, unknown>, request: (...args: unknown[]) => Promise<unknown>) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			const client = { capabilities: () => capabilities, request, documents: { version: () => undefined } } as unknown as LspClient;
+			return { session, client };
+		}
+		it("passes hover payload and exact position", async () => {
+			let args: unknown[] = [];
+			const hover = { contents: "details" };
+			const { session, client } = await makeSession({ hoverProvider: { workDoneProgress: true } }, async (...received) => { args = received; return { ok: true, value: hover }; });
+			try {
+				expect(await session.hover("fake", "file:///x.ts", 2, 4, 1234, client)).toEqual({ outcome: "ok", hover });
+				expect(args).toEqual(["textDocument/hover", { textDocument: { uri: "file:///x.ts" }, position: { line: 2, character: 4 } }, 1234]);
+			} finally { await session.dispose(); }
+		});
+		it("treats null as no hover", async () => {
+			const { session, client } = await makeSession({ hoverProvider: true }, async () => ({ ok: true, value: null }));
+			try { expect(await session.hover("fake", "file:///x.ts", 0, 0, 1000, client)).toEqual({ outcome: "ok", hover: null }); }
+			finally { await session.dispose(); }
+		});
+		it("returns unsupported without a hover capability", async () => {
+			const { session, client } = await makeSession({}, async () => ({ ok: true, value: {} }));
+			try { expect(await session.hover("fake", "file:///x.ts", 0, 0, 1000, client)).toEqual({ outcome: "unsupported", hover: null }); }
+			finally { await session.dispose(); }
+		});
+		it("returns failed when the request throws", async () => {
+			const { session, client } = await makeSession({ hoverProvider: true }, async () => { throw new Error("request failed"); });
+			try { expect(await session.hover("fake", "file:///x.ts", 0, 0, 1000, client)).toEqual({ outcome: "failed", hover: null }); }
+			finally { await session.dispose(); }
+		});
+	});
+
+	describe("inlay hint requests", () => {
+		async function makeSession(capabilities: Record<string, unknown>, request: (...args: unknown[]) => Promise<unknown>) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			const client = { capabilities: () => capabilities, request, documents: { version: () => undefined } } as unknown as LspClient;
+			return { session, client };
+		}
+		it("passes exact range and returns array results", async () => {
+			let args: unknown[] = [];
+			const hints = [{ position: { line: 2, character: 0 }, label: "type" }];
+			const { session, client } = await makeSession({ inlayHintProvider: { resolveProvider: true } }, async (...received) => { args = received; return { ok: true, value: hints }; });
+			try {
+				expect(await session.inlayHints("fake", "file:///x.ts", 1, 5, 1234, client)).toEqual({ outcome: "ok", hints });
+				expect(args).toEqual(["textDocument/inlayHint", { textDocument: { uri: "file:///x.ts" }, range: { start: { line: 1, character: 0 }, end: { line: 5, character: 0 } } }, 1234]);
+			} finally { await session.dispose(); }
+		});
+		it("treats null and other non-array results as empty successful answers", async () => {
+			const { session, client } = await makeSession({ inlayHintProvider: true }, async () => ({ ok: true, value: null }));
+			try {
+				expect(await session.inlayHints("fake", "file:///x.ts", 0, 1, 1000, client)).toEqual({ outcome: "ok", hints: [] });
+				const malformed = { ...client, request: async () => ({ ok: true, value: { hints: [] } }) } as unknown as LspClient;
+				expect(await session.inlayHints("fake", "file:///x.ts", 0, 1, 1000, malformed)).toEqual({ outcome: "ok", hints: [] });
+			} finally { await session.dispose(); }
+		});
+		it("rejects absent and empty-array capabilities", async () => {
+			const { session, client } = await makeSession({}, async () => ({ ok: true, value: [] }));
+			try {
+				expect(await session.inlayHints("fake", "file:///x.ts", 0, 1, 1000, client)).toEqual({ outcome: "unsupported", hints: [] });
+				const empty = { ...client, capabilities: () => ({ inlayHintProvider: [] }) } as unknown as LspClient;
+				expect(await session.inlayHints("fake", "file:///x.ts", 0, 1, 1000, empty)).toEqual({ outcome: "unsupported", hints: [] });
+			} finally { await session.dispose(); }
+		});
+		it("returns failed when the request throws", async () => {
+			const { session, client } = await makeSession({ inlayHintProvider: true }, async () => { throw new Error("request failed"); });
+			try { expect(await session.inlayHints("fake", "file:///x.ts", 0, 1, 1000, client)).toEqual({ outcome: "failed", hints: [] }); }
+			finally { await session.dispose(); }
+		});
+	});
 });
