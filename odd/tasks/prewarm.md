@@ -49,34 +49,39 @@ Tier 3 work ("Start working on T3") on 2026-10-05.
 ## Tasks
 
 ### P1 — Config surface: schema, types, validate, docs (test-first)
-- [ ] RED: config with `prewarm` rejected today (schema unknown-prop path);
-      non-boolean values accepted today
-- [ ] GREEN: `schema/lsp.schema.json` `$defs.server` `prewarm` boolean;
-      `ServerConfig.prewarm?: boolean`; `validateEffectiveConfig` boolean
-      check (error `/lsp/<id>/prewarm`); merge layering + omitted-keeps-off
-      regression; load accepts valid, rejects `"yes"`
-- [ ] README lifecycle-settings section documents `prewarm` (default `false`)
+- [x] RED observed: valid `prewarm: true` rejected by schema (unknown prop);
+      non-boolean values accepted by validation
+- [x] GREEN: `schema/lsp.schema.json` `$defs.server` `prewarm` boolean
+      (default false); `ServerConfig.prewarm?: boolean`;
+      `validateEffectiveConfig` boolean check (error `/lsp/<id>/prewarm`,
+      undefined allowed); merge layering + omitted-keeps-off regressions;
+      load accepts valid / rejects `"yes"`
+- [x] README lifecycle-settings section documents `prewarm` (default `false`)
+- [x] Focused config tests 17 passing
 - Route: delegated (gentle-ai-worker).
 
 ### P2 — Runtime prewarm primitive (test-first)
-- [ ] RED: no prewarm primitive exists
-- [ ] GREEN: `src/runtime/prewarm.ts` — `prewarmServers(session, {canonicalRoot, logError})`:
-      iterates enabled servers with `prewarm === true`, trust-checks, starts in
-      background, records start failure/success per pool key; already-started /
-      pending / disabled / cooling-down servers are no-ops (idempotent)
-- [ ] RED→GREEN tests (`tests/unit/runtime/prewarm.test.ts`): default off
-      spawns nothing; untrusted spawns nothing; enabled+trusted starts and a
-      concurrent demand activation coalesces to one startup (`calls() === 1`);
-      failure counts once and honors cooldown; repeated invocation does not
-      double-start
+- [x] RED observed: no prewarm primitive existed
+- [x] GREEN: `src/runtime/prewarm.ts` `prewarmServers(session, {canonicalRoot,
+      logError})` — effective-config guard (`lsp === false` off), trust gate
+      (canonicalizeRoot + authorize), per-server `prewarm === true` filter,
+      `disabled` skip, `getOrCreateClient` + `ensure()` +
+      `recordStartFailure/Success` per pool key, per-server error isolation
+- [x] RED→GREEN tests (`tests/unit/runtime/prewarm.test.ts`): default off
+      spawns nothing; untrusted spawns nothing; enabled+trusted starts and
+      demand activation coalesces to one factory call; failure counts once +
+      cooldown honored; repeated invocation never double-starts
 - Route: delegated (gentle-ai-worker).
 
 ### P3 — Extension wiring (test-first)
-- [ ] RED: session_start does not trigger prewarm
-- [ ] GREEN: `session_start` handler fires `prewarmServers` fire-and-forget
-      with `ctx.cwd`, gated by `disposed`; handler errors logged, never thrown;
-      `session_shutdown` keeps disposing late starts
-- [ ] Checks: typecheck, lint, full test suite, build, `git diff --check`
+- [x] RED observed: no `session_start` handler existed
+- [x] GREEN: `session_start` handler fires `prewarmServers` fire-and-forget
+      with `ctx.cwd`, `disposed`-gated before AND after `getSession` (shutdown
+      race), errors via `logError` never thrown; `session_shutdown` keeps
+      disposing late starts
+- [x] Checks: 418 tests / 43 files passing; lint 0; typecheck clean; build
+      clean; `git diff --check` clean (independently re-run by
+      gentle-ai-verify, mutation check clean)
 - Route: delegated (gentle-ai-worker).
 
 ## Non-goals
@@ -105,6 +110,13 @@ Tier 3 work ("Start working on T3") on 2026-10-05.
   (config flow, activation/ensure structure, extension startup, test
   conventions); kick timing resolved against Pi extension docs
   (`session_start`). Branch created. P1 delegated.
+- 2026-10-05: P1–P3 complete via one worker task (first delegation rejected
+  for a non-canonical allowed-surfaces block; relaunch with proper heading).
+  Work units: 05fae56 (config), d62f17b (runtime+wiring), 3d456a5 (README).
+  Parent spot checks: prewarm.ts default-off/trust/accounting/isolation;
+  extension double disposed-gate; validate boolean path; schema placement.
+  Accepted nuance: session_start now creates the RuntimeSession eagerly
+  (config load only; no server starts unless `prewarm: true`).
 
 ## Review record
 
