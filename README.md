@@ -49,7 +49,7 @@ Reads launch activation in the background and immediately attach any cached diag
 
 ### Per-server lifecycle settings
 
-Each server entry may optionally set `initializeTimeoutMs` (default `15000`), `requestTimeoutMs` (default `10000`), `retryCooldownMs` (default `60000`), and `maxConsecutiveStartFailures` (default `3`). Values are layered per field: project configuration overrides global configuration, and omitted values preserve the defaults. Timeouts and failure thresholds must be positive integers; retry cooldown must be a non-negative integer. Values outside the supported bounds or of an invalid type are rejected with an error naming the server and setting; they are never clamped or coerced.
+Each server entry may optionally set `initializeTimeoutMs` (default `15000`), `requestTimeoutMs` (default `10000`), `retryCooldownMs` (default `60000`), `maxConsecutiveStartFailures` (default `3`), and `prewarm` (default `false`). Set `prewarm: true` to start that server in the background at session start for trusted projects; documents remain demand-synchronized. Values are layered per field: project configuration overrides global configuration, and omitted values preserve the defaults. Timeouts and failure thresholds must be positive integers; retry cooldown must be a non-negative integer. Values outside the supported bounds or of an invalid type are rejected with an error naming the server and setting; they are never clamped or coerced.
 
 ## Development
 
