@@ -32,7 +32,9 @@ Strict TDD for the tool task (observed RED → GREEN); docs read-back; structura
 |------|--------|---------|
 | O1 | `fd2fcab` | feat(tools): add lsp_organize_imports tool |
 | O2 | `527f024` | docs: document lsp_organize_imports tool |
-| O3 | _pending_ | closure + review record |
+| O3 | `6ba35ea` | docs: record organize-imports-preview closure evidence |
+
+Review-record commit: follows as `docs: record organize-imports-preview review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (O3)
 
@@ -42,7 +44,11 @@ Strict TDD for the tool task (observed RED → GREEN); docs read-back; structura
 
 ## Review record
 
-- _pending at close (O3)._
+- ASSESS (committed range, base `6a284a7` = post-merge main, committedOnly): medium risk, executable change (`src/extension.ts`), 5 paths / 310 lines, reviewDue = `under_budget`; plan = writerSelfVerification (independent battery already run).
+- One stale consent binding, then START with explicit full base `6a284a738bb1f0821222ee0a9befa496834f3d53` created lineage `review-923d207720dfae2e` (medium, review-reliability).
+- Native review: **approved**; acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-001 — `src/pi/lsp-organize-imports-tool.ts:58` (WARNING)
 
 ## Route evidence
 
