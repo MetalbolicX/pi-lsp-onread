@@ -39,7 +39,9 @@ Non-blocking; never apply/execute; explicit `unsupported`/`failed`; reject-vs-wa
 | P1.1 | `eea9baf` | test(fixture): add code-action mode to fake LSP server |
 | P1.2 | `e7cfd4d` | feat(runtime): add code action and resolve requests |
 | P1.3 | `e1cbd80` | feat(preview): add workspace edit validation and rendering |
-| P1.4 | _pending_ | closure + review record |
+| P1.4 | `1e71bc8` | docs: record edit-preview-engine closure evidence |
+
+Review-record commit: follows as `docs: record edit-preview-engine review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (P1.4)
 
@@ -50,7 +52,12 @@ Non-blocking; never apply/execute; explicit `unsupported`/`failed`; reject-vs-wa
 
 ## Review record
 
-- _pending at close (P1.4)._
+- ASSESS (committed range, base `3a76362`, committedOnly): medium risk, executable change (`src/preview/workspace-edit.ts`), 7 paths / 635 lines, reviewDue = `slice_budget_reached`; plan = writerSelfVerification (independent battery already run).
+- Standing procedure applied from the outset: START with explicit full branch-base `3a763622e8f8a635029ab9453466f0a1b6c2f0de` + `committedOnly: true` (cumulative route skipped — it would exceed the reviewer context budget). One stale consent binding preceded success.
+- Reduced-scope lineage `review-e2bc3e79df7562f9` (medium, review-reliability) → **approved** → acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational findings (separate later work, on the new engine):
+  - R3-001 — `src/preview/workspace-edit.ts:70-74` (WARNING)
+  - R3-002 — `src/preview/workspace-edit.ts:219` (WARNING)
 
 ## Route evidence
 
