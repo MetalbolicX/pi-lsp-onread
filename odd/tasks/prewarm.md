@@ -120,4 +120,10 @@ Tier 3 work ("Start working on T3") on 2026-10-05.
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-c9a4b74e890b0a42`, medium tier
+  (`configuration_change` on `schema/lsp.schema.json`), review-reliability
+  lens, 11 paths / 324 lines, correction budget 162, base
+  `4e94181c7150bf7152e1090f7ea1d2e2fe1b98c5` (committedOnly). Reviewer
+  forecast (1 host-relay run) acknowledged; approved on the last admitted
+  event; acknowledgement burned (consumed revision `sha256:abe7c522…`).
+  Delivery: ordinary repository policy.
