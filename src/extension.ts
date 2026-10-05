@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { buildEffectiveConfig } from "./config/index.js";
 import { activate } from "./runtime/activation.js";
@@ -16,6 +17,7 @@ import { registerLspDefinitionTool, registerLspReferencesTool } from "./pi/lsp-n
 import { registerLspSymbolsTool } from "./pi/lsp-symbols-tool.js";
 import { registerLspWorkspaceSymbolsTool } from "./pi/lsp-workspace-symbols-tool.js";
 import { computeScorecard } from "./diagnostics/scorecard.js";
+import { preflightCheck, preflightMessages } from "./diagnostics/preflight.js";
 import { matchServers } from "./workspace/match.js";
 
 type SessionFactory = (projectRoot: string) => Promise<RuntimeSession>;
@@ -36,6 +38,7 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 		let sessionPromise: Promise<RuntimeSession> | undefined;
 		let disposed = false;
 		const cachedResults = new Map<string, string>();
+		const preflightNotes = new Map<string, { errorCount: number; messages: string[] }>();
 		const editedDocuments = new Map<string, { serverId: string; uri: string }>();
 		let scorecardSession: RuntimeSession | undefined;
 		const scorecardPi = pi as unknown as {
@@ -73,6 +76,38 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 				}
 			})();
 		});
+		pi.on("tool_call", async (event, ctx) => {
+			try {
+				if (disposed || (event.toolName !== "edit" && event.toolName !== "write")) return undefined;
+				if (typeof event.input.path !== "string" || !sessionPromise) return undefined;
+				const session = await sessionPromise;
+				if (!session.configResult.ok) return undefined;
+				const mode = session.configResult.config.preflight ?? "advisory";
+				if (mode === "off") return undefined;
+				const absolutePath = resolve(ctx.cwd, event.input.path);
+				const matches = matchServers(session.configResult.config, absolutePath);
+				if (matches.length === 0) return undefined;
+				const uri = pathToFileURL(absolutePath).href;
+				const servers = matches.map(({ serverId }) => {
+					const client = [...session.pool.entries()].find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+					return { serverId, currentVersion: client?.documents.version(uri) };
+				});
+				const check = preflightCheck({ store: session.diagnostics, servers, uri });
+				preflightNotes.delete(absolutePath);
+				if (check.outcome !== "errors" || check.errorCount === 0) return undefined;
+				const messages = preflightMessages(check);
+				if (mode === "block") {
+					const details = messages.length > 0 ? `: ${messages.join("; ")}` : "";
+					return { block: true, reason: `Preflight found ${check.errorCount} current error(s) in ${absolutePath}${details}`.slice(0, 600) };
+				}
+				preflightNotes.set(absolutePath, { errorCount: check.errorCount, messages });
+				while (preflightNotes.size > 100) preflightNotes.delete(preflightNotes.keys().next().value!);
+				return undefined;
+			} catch (error) {
+				try { logError("pi-lsp-onread: preflight failed", error); } catch { /* Never let logging block the tool call. */ }
+				return undefined;
+			}
+		});
 		createHookBindings(pi, {
 			activate: async (absoluteFilePath, event, projectRoot) => {
 				if (disposed) return undefined;
@@ -87,10 +122,18 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 						}
 					}
 					const result = await activate(session, absoluteFilePath, event);
-					if (result.kind === "ok") return result.formatted;
-					if (result.kind === "untrusted") return result.guidance;
-					if (result.kind === "inactive") return result.reason;
-					return undefined;
+					let formatted = result.kind === "ok" ? result.formatted
+						: result.kind === "untrusted" ? result.guidance
+							: result.kind === "inactive" ? result.reason : undefined;
+					if (event === "edit") {
+						const note = preflightNotes.get(absoluteFilePath);
+						preflightNotes.delete(absoluteFilePath);
+						if (note) {
+							const messages = note.messages.length > 0 ? `: ${note.messages.join("; ")}` : "";
+							formatted = `${formatted ?? ""}${formatted ? "\n" : ""}note: ${note.errorCount} error(s) pre-existed before this edit${messages}`;
+						}
+					}
+					return formatted;
 				};
 				if (event === "read") {
 					void (async () => {
