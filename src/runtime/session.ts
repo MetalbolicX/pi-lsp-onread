@@ -102,6 +102,11 @@ export class RuntimeSession {
 		return [...new Set([...this.pool.keys()].map((key) => key.slice(0, key.indexOf("::"))))];
 	}
 
+	/** Resolve a supplied client or the first pooled client for this server. */
+	private matchedClient(serverId: string, suppliedClient?: LspClient): LspClient | undefined {
+		return suppliedClient ?? [...this.pool.entries()].find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+	}
+
 	getOrCreateClient(key: string, options: ClientFactoryOptions): Promise<ClientFactoryResult> {
 		if (this.disposed) return Promise.resolve({ ok: false, message: "LSP session is disposed" });
 		const retryCooldownMs = options.server.retryCooldownMs ?? this.retryCooldownMs;
@@ -185,8 +190,7 @@ export class RuntimeSession {
 
 	async pullWorkspace(serverId: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "applied"> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			const diagnosticProvider = client?.capabilities()?.diagnosticProvider as { workspaceDiagnostics?: unknown } | undefined;
 			if (!client || diagnosticProvider?.workspaceDiagnostics !== true) return "unsupported";
 			if (timeoutMs <= 0) return "failed";
@@ -237,8 +241,7 @@ export class RuntimeSession {
 
 	async documentSymbols(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; symbols: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.documentSymbolProvider) return { outcome: "unsupported", symbols: [] };
 			if (timeoutMs <= 0) return { outcome: "failed", symbols: [] };
 			const response = await client.request<unknown>("textDocument/documentSymbol", { textDocument: { uri } }, timeoutMs);
@@ -252,8 +255,7 @@ export class RuntimeSession {
 
 	async workspaceSymbols(serverId: string, query: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; symbols: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.workspaceSymbolProvider) return { outcome: "unsupported", symbols: [] };
 			if (timeoutMs <= 0) return { outcome: "failed", symbols: [] };
 			const response = await client.request<unknown>("workspace/symbol", { query }, timeoutMs);
@@ -267,8 +269,7 @@ export class RuntimeSession {
 
 	async codeActions(serverId: string, uri: string, range: { start: { line: number; character: number }; end: { line: number; character: number } }, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; actions: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.codeActionProvider) return { outcome: "unsupported", actions: [] };
 			if (timeoutMs <= 0) return { outcome: "failed", actions: [] };
 			const response = await client.request<unknown>("textDocument/codeAction", { textDocument: { uri }, range }, timeoutMs);
@@ -283,8 +284,7 @@ export class RuntimeSession {
 
 	async resolveCodeAction(serverId: string, action: unknown, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; action: unknown }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			const provider = client?.capabilities()?.codeActionProvider;
 			if (!client || !provider || typeof provider !== "object" || Array.isArray(provider)
 				|| !(provider as { resolveProvider?: unknown }).resolveProvider) {
@@ -304,8 +304,7 @@ export class RuntimeSession {
 
 	async definition(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.definitionProvider) return { outcome: "unsupported", locations: [] };
 			if (timeoutMs <= 0) return { outcome: "failed", locations: [] };
 			const response = await client.request<unknown>("textDocument/definition", {
@@ -325,8 +324,7 @@ export class RuntimeSession {
 	/** Request hover information at a document position. */
 	async hover(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hover: unknown }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			const provider = client?.capabilities()?.hoverProvider;
 			if (!client || !provider) return { outcome: "unsupported", hover: null };
 			if (timeoutMs <= 0) return { outcome: "failed", hover: null };
@@ -344,8 +342,7 @@ export class RuntimeSession {
 	/** Request the server's prepareRename result at a document position. */
 	async prepareRename(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; prepare: unknown }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			const provider = client?.capabilities()?.renameProvider;
 			const renameSupported = Boolean(provider);
 			const prepareSupported = typeof provider === "object" && provider !== null
@@ -366,8 +363,7 @@ export class RuntimeSession {
 	/** Request a rename WorkspaceEdit at a document position. */
 	async rename(serverId: string, uri: string, line: number, character: number, newName: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; edit: unknown }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.renameProvider) return { outcome: "unsupported", edit: null };
 			if (timeoutMs <= 0) return { outcome: "failed", edit: null };
 			const response = await client.request<unknown>("textDocument/rename", {
@@ -385,8 +381,7 @@ export class RuntimeSession {
 	/** Request formatting edits for a document using the supplied formatting options. */
 	async formatting(serverId: string, uri: string, options: { tabSize: number; insertSpaces: boolean; trimTrailingWhitespace?: boolean; insertFinalNewline?: boolean; trimFinalNewlines?: boolean }, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; edits: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.documentFormattingProvider) return { outcome: "unsupported", edits: [] };
 			if (timeoutMs <= 0) return { outcome: "failed", edits: [] };
 			const response = await client.request<unknown>("textDocument/formatting", {
@@ -403,8 +398,7 @@ export class RuntimeSession {
 	/** Request inlay hints for a document line range. */
 	async inlayHints(serverId: string, uri: string, startLine: number, endLine: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hints: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			const provider = client?.capabilities()?.inlayHintProvider;
 			const supported = provider === true || (Array.isArray(provider) ? provider.length > 0 : Boolean(provider && typeof provider === "object"));
 			if (!client || !supported) return { outcome: "unsupported", hints: [] };
@@ -423,8 +417,7 @@ export class RuntimeSession {
 
 	async references(serverId: string, uri: string, line: number, character: number, includeDeclaration: boolean, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || !client.capabilities()?.referencesProvider) return { outcome: "unsupported", locations: [] };
 			if (timeoutMs <= 0) return { outcome: "failed", locations: [] };
 			const response = await client.request<unknown>("textDocument/references", {
@@ -443,8 +436,7 @@ export class RuntimeSession {
 
 	async pullFresh(serverId: string, uri: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<"unsupported" | "failed" | "full" | "unchanged"> {
 		try {
-			const client = suppliedClient ?? [...this.pool.entries()]
-				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const client = this.matchedClient(serverId, suppliedClient);
 			if (!client || client.capabilities()?.diagnosticProvider === undefined) return "unsupported";
 			if (timeoutMs <= 0) return "failed";
 			const previousResultId = this.pullState.get(serverId, uri);
