@@ -59,39 +59,44 @@ existing `tool_result` combine path.
 ## Tasks
 
 ### F1 — Config surface: top-level preflight enum (test-first)
-- [ ] RED: preflight dropped by merge; invalid values accepted
-- [ ] GREEN: schema enum; types (`SourceConfig`/`MergedConfig`/
-      `EffectiveConfig`); `ConfigLayer` + `mergeConfig` threading; validate
-      enum check; layering + default-advisory regressions
+- [x] RED observed: preflight dropped by merge; invalid values accepted
+- [x] GREEN: schema enum `off|advisory|block`; types on all three config
+      interfaces; `ConfigLayer` + `mergeConfig` threading (absent stays
+      absent ⇒ advisory at consumption); validate enum check
+      (`/preflight: must be one of "off", "advisory", "block"`); layering
+      + absent-default regressions
 - Route: delegated (gentle-ai-worker).
 
 ### F2 — Pure preflight check (test-first)
-- [ ] RED: module absent
-- [ ] GREEN: `preflightCheck` per design — all five outcomes, errorCount
-      only severity 1, multiple matched servers aggregated (worst-case
-      freshness semantics: any current-with-errors ⇒ errors; unknown version
-      ⇒ unknown even with snapshots), bounded message extraction helper
-- [ ] Tests: each outcome; stale never blocks/never claims; severity
-      filtering; multi-server aggregation
+- [x] RED observed: module absent
+- [x] GREEN: `preflightCheck` — five outcomes with precedence errors >
+      stale > unknown > no-data > clear; errorCount severity-1 only and
+      only from current servers; per-server currentVersion (undefined OR
+      null-version snapshot ⇒ unknown); `preflightMessages` ≤3 × 120 chars
+- [x] Tests: each outcome, severity filtering, multi-server aggregation
 - Route: delegated (gentle-ai-worker).
 
 ### F3 — Extension wiring: tool_call + advisory line + block (test-first)
-- [ ] RED: no `tool_call` handler; no advisory line
-- [ ] GREEN: handler per design (fail-safe, never throws, never spawns,
-      reads untouched); advisory stash consumed by the edit `tool_result`
-      wrapper with one bounded line; block mode returns `{block, reason}`
-      only on current errors; `"off"` short-circuits; stash size-capped
-- [ ] Tests (local fake pi): registered once; advisory line appears only
-      with fresh pre-existing errors; no line for clear/unknown/stale;
-      block only for fresh errors with bounded reason; no session ⇒ no-op;
-      off ⇒ no-op; handler survives store throw (returns undefined);
-      input never mutated
-- [ ] Checks: typecheck, lint, full suite, build, `git diff --check`
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed: no `tool_call` handler; no advisory line
+- [x] GREEN: handler fail-safe (try/catch → logError → undefined; never
+      throws), never spawns (sessionPromise gate), edit/write + string path
+      + matched-servers gates, pooled-client version lookup, block ONLY on
+      current errors with ≤600-char actionable reason, advisory stash
+      (size-capped 100, consumed at edit tool_result with ONE bounded
+      note), off short-circuits, input never mutated
+- [x] **Parent-found defect (RED→GREEN)**: a failed edit left its stashed
+      note in place; a later successful edit of the same path after the
+      diagnostics cleared would attach the stale note and falsely claim
+      pre-existing errors. Fix: refresh-or-clear the note on EVERY matched
+      edit/write tool_call. Regression test observes the false claim fail,
+      then pass
+- [x] Checks: 447 tests / 47 files passing; lint 0; typecheck clean; build
+      clean; `git diff --check` clean (gentle-ai-verify, mutation-clean)
+- Route: delegated (gentle-ai-worker) + parent fix
 
 ### F4 — README
-- [ ] Document `preflight` (default "advisory"; "block" opt-in; "off") and
-      the fail-open guarantees.
+- [x] "Edit preflight" section: modes, default advisory, fail-open
+      guarantees, bounded reasons
 - Route: parent (docs).
 
 ## Non-goals
@@ -119,6 +124,10 @@ existing `tool_result` combine path.
 - 2026-10-05: authorized (user "continue"). Pi tool_call contract verified
   from types.d.ts (toolCallId; `{block, reason, terminate}`; throwing
   handler blocks fail-safe). Design locked. Branch created. F1–F3 delegated.
+- 2026-10-05: F1–F3 complete via one worker task (446 tests reported);
+  parent spot-check found the stale-note truthfulness defect and fixed it
+  RED→GREEN inline (447 tests final). Work units: 05a8d83 (config), eb8d74d
+  (pure check), 4f1c317 (wiring + regression), abff916 (README, parent).
 
 ## Review record
 
