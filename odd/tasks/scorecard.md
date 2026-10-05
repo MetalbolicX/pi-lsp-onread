@@ -126,4 +126,10 @@ transcript. User chose default **Off** when config omits the flag.
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-29afc70cbacfb531`, medium tier
+  (`configuration_change` on `schema/lsp.schema.json`), review-reliability
+  lens, 12 paths / 433 lines, correction budget 200, base
+  `20bf3b62e7012ce3a324051ef311385ad6ec7845` (committedOnly). Reviewer
+  forecast (1 host-relay run) acknowledged; approved on the last admitted
+  event; acknowledgement burned (consumed revision `sha256:fd51c471…`).
+  Delivery: ordinary repository policy.
