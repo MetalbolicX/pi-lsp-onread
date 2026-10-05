@@ -30,7 +30,9 @@ Strict TDD for P2.1 (observed RED → GREEN); P2.2 docs read-back; structural ta
 |------|--------|---------|
 | P2.1 | `fe23fab` | feat(tools): add lsp_code_actions tool |
 | P2.2 | `870a67f` | docs: document lsp_code_actions tool |
-| P2.3 | _pending_ | closure + review record |
+| P2.3 | `b293591` | docs: record code-action-tool closure evidence |
+
+Review-record commit: follows as `docs: record code-action-tool review approval` (its own hash cannot be tabulated from inside the recorded document; see git log).
 
 ## Verification evidence (P2.3)
 
@@ -41,7 +43,11 @@ Strict TDD for P2.1 (observed RED → GREEN); P2.2 docs read-back; structural ta
 
 ## Review record
 
-- _pending at close (P2.3)._
+- ASSESS (committed range, base `a28df4b`, committedOnly): medium risk, executable change (`src/extension.ts`), 6 paths / 347 lines, reviewDue = `under_budget`; plan = writerSelfVerification (independent battery already run).
+- Standing procedure: START with explicit full branch-base `a28df4bb53b91c414722d917cdff2d0e5acf38f5` + `committedOnly: true` succeeded first try (no stale binding this cycle).
+- Reduced-scope lineage `review-7065b67c014a3049` (medium, review-reliability) → **approved** → acknowledgement burned (`delivery: ordinary-repository-policy`).
+- Non-blocking informational finding (separate later work):
+  - R3-001 — `src/pi/lsp-code-actions-tool.ts:105` (WARNING)
 
 ## Route evidence
 
