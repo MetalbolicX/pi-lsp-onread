@@ -49,7 +49,7 @@ describe("validateWorkspaceEdit", () => {
 		expect(changesResult).toMatchObject({ verdict: "ok", files: [{ path: "/workspace/My File.txt" }] });
 		const documentResult = await validate({ documentChanges: [textDocumentEdit(), { kind: "create", uri: "file:///workspace/new.txt" }] });
 		expect(documentResult).toMatchObject({ verdict: "ok", ops: [{ kind: "create", path: "/workspace/new.txt" }] });
-		const combined = await validate({ changes: { "file:///workspace/a.txt": [textEdit()] }, documentChanges: [textDocumentEdit()] });
+		const combined = await validate({ changes: { "file:///workspace/a.txt": [textEdit()] }, documentChanges: [textDocumentEdit("file:///workspace/other.txt")] });
 		expect(combined.verdict).toBe("ok");
 	});
 
@@ -67,6 +67,39 @@ describe("validateWorkspaceEdit", () => {
 		const result = await validate({ changes: { "file:///workspace/a.txt": [textEdit()], "file:///outside": [textEdit()] } }, { readFile: async () => { reads++; return undefined; } });
 		expect(result).toMatchObject({ verdict: "rejected", warnings: [] });
 		expect(reads).toBe(0);
+	});
+
+	const rangeEdit = (startLine: number, startCharacter: number, endLine: number, endCharacter: number) => textEdit({
+		range: { start: { line: startLine, character: startCharacter }, end: { line: endLine, character: endCharacter } },
+	});
+
+	it.each([
+		["same-line intersecting ranges", [rangeEdit(0, 1, 0, 4), rangeEdit(0, 3, 0, 5)]],
+		["an insert inside a range", [rangeEdit(0, 1, 0, 4), rangeEdit(0, 2, 0, 2)]],
+		["ranges crossing line boundaries", [rangeEdit(0, 3, 1, 2), rangeEdit(1, 1, 1, 3)]],
+	])("rejects %s", async (_label, edits) => {
+		expect(await validate({ changes: { "file:///workspace/a.txt": edits } })).toMatchObject({
+			verdict: "rejected", reasons: ["overlapping text edits in /workspace/a.txt"], warnings: [],
+		});
+	});
+
+	it("allows adjacent ranges and identical-position insertions", async () => {
+		for (const edits of [
+			[rangeEdit(0, 1, 0, 3), rangeEdit(0, 3, 0, 5)],
+			[rangeEdit(0, 2, 0, 2), rangeEdit(0, 2, 0, 2)],
+		]) expect((await validate({ changes: { "file:///workspace/a.txt": edits } })).verdict).toBe("ok");
+	});
+
+	it("collects overlap once per offending file and checks versioned document edits", async () => {
+		const overlap = [rangeEdit(0, 1, 0, 4), rangeEdit(0, 3, 0, 5)];
+		const result = await validate({ changes: {
+			"file:///workspace/a.txt": overlap,
+			"file:///workspace/other.txt": overlap,
+			"file:///workspace/clean.txt": [rangeEdit(0, 1, 0, 2)],
+		} });
+		expect(result).toMatchObject({ verdict: "rejected", reasons: ["overlapping text edits in /workspace/a.txt", "overlapping text edits in /workspace/other.txt"], warnings: [] });
+		const versioned = await validate({ documentChanges: [textDocumentEdit("file:///workspace/a.txt", overlap, 7)] });
+		expect(versioned).toMatchObject({ verdict: "rejected", reasons: ["overlapping text edits in /workspace/a.txt"] });
 	});
 });
 
@@ -101,12 +134,19 @@ describe("renderWorkspaceEdit", () => {
 	});
 
 	it("caps edits with the correct omission count", async () => {
-		const output = await render({ changes: { "file:///workspace/a.txt": [textEdit(), textEdit(), textEdit()] } }, { maxEdits: 1 });
+		const output = await render({ changes: { "file:///workspace/a.txt": [
+			textEdit({ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }),
+			textEdit({ range: { start: { line: 0, character: 1 }, end: { line: 0, character: 2 } } }),
+			textEdit({ range: { start: { line: 0, character: 2 }, end: { line: 0, character: 3 } } }),
+		] } }, { maxEdits: 1 });
 		expect(output).toContain("… 2 more edits not shown");
 	});
 
 	it("reserves omission space and never exceeds maxChars", async () => {
-		const full = await render({ changes: { "file:///workspace/a.txt": [textEdit(), textEdit()] } }, { maxChars: 44 });
+		const full = await render({ changes: { "file:///workspace/a.txt": [
+			textEdit({ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }),
+			textEdit({ range: { start: { line: 0, character: 1 }, end: { line: 0, character: 2 } } }),
+		] } }, { maxChars: 44 });
 		expect(full.length).toBeLessThanOrEqual(44);
 		expect(full).toContain("more edits not shown");
 	});

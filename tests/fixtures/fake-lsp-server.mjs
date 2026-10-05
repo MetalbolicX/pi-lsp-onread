@@ -10,6 +10,8 @@ const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
+const rename = process.env.FAKE_RENAME === "1";
+const renameBoolean = process.env.FAKE_RENAME_BOOLEAN === "1";
 const delayMs = Number.parseInt(process.env.FAKE_DELAY_MS ?? "0", 10);
 const workspaceDelayMs = Number.parseInt(process.env.FAKE_WORKSPACE_DELAY_MS ?? "0", 10);
 
@@ -113,6 +115,8 @@ function handle(message) {
 		capabilities.hoverProvider = true;
 		capabilities.inlayHintProvider = true;
 		if (codeActions) capabilities.codeActionProvider = { resolveProvider: true };
+		if (rename) capabilities.renameProvider = { prepareProvider: true };
+		if (renameBoolean) capabilities.renameProvider = true;
 		send({ jsonrpc: "2.0", id: message.id, result: { capabilities } });
 	} else if (message.method === "initialized") {
 		if (process.env.FAKE_SERVER_REQUESTS === "1") startServerRequests();
@@ -171,6 +175,31 @@ function handle(message) {
 			range: { start: { line: index, character: 0 }, end: { line: index, character: content.length } },
 		}));
 		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/prepareRename" && (rename || renameBoolean)) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { line, character } = message.params.position ?? {};
+		const result = rename && line === 0 && character === 0
+			? { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 13 } }, placeholder: "fixtureSymbol" }
+			: null;
+		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/rename" && (rename || renameBoolean)) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const { newName } = message.params;
+		const secondUri = `${uri}.second`;
+		const edits = process.env.FAKE_OVERLAPPING_RENAME === "1"
+			? [
+				{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, newText: newName },
+				{ range: { start: { line: 0, character: 3 }, end: { line: 0, character: 7 } }, newText: newName },
+			]
+			: [
+				{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, newText: newName },
+				{ range: { start: { line: 0, character: 7 }, end: { line: 0, character: 13 } }, newText: newName },
+			];
+		send({ jsonrpc: "2.0", id: message.id, result: { changes: {
+			[uri]: edits,
+			[secondUri]: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: newName }],
+		} } });
 	} else if (message.method === "textDocument/hover") {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const { uri } = message.params.textDocument;

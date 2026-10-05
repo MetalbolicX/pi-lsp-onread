@@ -717,4 +717,53 @@ describe("RuntimeSession", () => {
 			finally { await session.dispose(); }
 		});
 	});
+
+	describe("rename requests", () => {
+		async function makeSession(capabilities: Record<string, unknown>, request: (...args: unknown[]) => Promise<unknown>) {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			let args: unknown[] = [];
+			const client = { capabilities: () => capabilities, request: async (...received: unknown[]) => { args = received; return request(...received); }, documents: { version: () => undefined } } as unknown as LspClient;
+			return { session, client, getArgs: () => args };
+		}
+		const uri = "file:///rename.ts";
+		const position = { line: 3, character: 5 };
+		const prepare = { range: { start: position, end: { line: 3, character: 10 } }, placeholder: "symbol" };
+		const edit = { changes: { [uri]: [] } };
+
+		it("sends prepareRename and preserves result and null", async () => {
+			const { session, client, getArgs } = await makeSession({ renameProvider: { prepareProvider: true } }, async () => ({ ok: true, value: prepare }));
+			try {
+				expect(await session.prepareRename("fake", uri, 3, 5, 1234, client)).toEqual({ outcome: "ok", prepare });
+				expect(getArgs()).toEqual(["textDocument/prepareRename", { textDocument: { uri }, position }, 1234]);
+				const nullClient = { ...client, request: async () => ({ ok: true, value: null }) } as unknown as LspClient;
+				expect(await session.prepareRename("fake", uri, 3, 5, 1234, nullClient)).toEqual({ outcome: "ok", prepare: null });
+			} finally { await session.dispose(); }
+		});
+		it("gates prepare by rename and prepareProvider capabilities", async () => {
+			const { session, client } = await makeSession({ renameProvider: true }, async () => ({ ok: true, value: prepare }));
+			try {
+				expect(await session.prepareRename("fake", uri, 3, 5, 1234, { ...client, capabilities: () => ({}) } as unknown as LspClient)).toEqual({ outcome: "unsupported", prepare: null });
+				expect(await session.prepareRename("fake", uri, 3, 5, 1234, client)).toEqual({ outcome: "unsupported", prepare: null });
+			} finally { await session.dispose(); }
+		});
+		it("sends rename and supports boolean or object provider forms", async () => {
+			const { session, client, getArgs } = await makeSession({ renameProvider: { prepareProvider: true } }, async () => ({ ok: true, value: edit }));
+			try {
+				expect(await session.rename("fake", uri, 3, 5, "renamed", 1234, client)).toEqual({ outcome: "ok", edit });
+				expect(getArgs()).toEqual(["textDocument/rename", { textDocument: { uri }, position, newName: "renamed" }, 1234]);
+				const booleanProvider = { ...client, capabilities: () => ({ renameProvider: true }), request: async () => ({ ok: true, value: null }) } as unknown as LspClient;
+				expect(await session.rename("fake", uri, 3, 5, "renamed", 1234, booleanProvider)).toEqual({ outcome: "ok", edit: null });
+			} finally { await session.dispose(); }
+		});
+		it("reports unsupported capabilities and failed requests", async () => {
+			const { session, client } = await makeSession({}, async () => { throw new Error("request failed"); });
+			try {
+				expect(await session.rename("fake", uri, 3, 5, "renamed", 1234, client)).toEqual({ outcome: "unsupported", edit: null });
+				const capable = { ...client, capabilities: () => ({ renameProvider: true }) } as unknown as LspClient;
+				expect(await session.rename("fake", uri, 3, 5, "renamed", 1234, capable)).toEqual({ outcome: "failed", edit: null });
+				expect(await session.prepareRename("fake", uri, 3, 5, 1234, { ...capable, capabilities: () => ({ renameProvider: { prepareProvider: true } }) } as unknown as LspClient)).toEqual({ outcome: "failed", prepare: null });
+			} finally { await session.dispose(); }
+		});
+	});
 });

@@ -341,6 +341,47 @@ export class RuntimeSession {
 		}
 	}
 
+	/** Request the server's prepareRename result at a document position. */
+	async prepareRename(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; prepare: unknown }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			const provider = client?.capabilities()?.renameProvider;
+			const renameSupported = Boolean(provider);
+			const prepareSupported = typeof provider === "object" && provider !== null
+				&& (provider as { prepareProvider?: unknown }).prepareProvider === true;
+			if (!client || !renameSupported || !prepareSupported) return { outcome: "unsupported", prepare: null };
+			if (timeoutMs <= 0) return { outcome: "failed", prepare: null };
+			const response = await client.request<unknown>("textDocument/prepareRename", {
+				textDocument: { uri },
+				position: { line, character },
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", prepare: null };
+			return { outcome: "ok", prepare: response.value ?? null };
+		} catch {
+			return { outcome: "failed", prepare: null };
+		}
+	}
+
+	/** Request a rename WorkspaceEdit at a document position. */
+	async rename(serverId: string, uri: string, line: number, character: number, newName: string, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; edit: unknown }> {
+		try {
+			const client = suppliedClient ?? [...this.pool.entries()]
+				.find(([key]) => key.startsWith(`${serverId}::`))?.[1];
+			if (!client || !client.capabilities()?.renameProvider) return { outcome: "unsupported", edit: null };
+			if (timeoutMs <= 0) return { outcome: "failed", edit: null };
+			const response = await client.request<unknown>("textDocument/rename", {
+				textDocument: { uri },
+				position: { line, character },
+				newName,
+			}, timeoutMs);
+			if (!response.ok) return { outcome: "failed", edit: null };
+			return { outcome: "ok", edit: response.value ?? null };
+		} catch {
+			return { outcome: "failed", edit: null };
+		}
+	}
+
 	/** Request inlay hints for a document line range. */
 	async inlayHints(serverId: string, uri: string, startLine: number, endLine: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hints: unknown[] }> {
 		try {

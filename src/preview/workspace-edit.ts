@@ -113,6 +113,22 @@ export async function validateWorkspaceEdit(
 		}
 	}
 	if (!hasEntries) reasons.push("edit contains no document changes");
+	for (const file of files) {
+		if (file.edits.length < 2) continue;
+		const sorted = [...file.edits].sort((left, right) =>
+			comparePosition(left.startLine, left.startCharacter, right.startLine, right.startCharacter)
+			|| comparePosition(right.endLine, right.endCharacter, left.endLine, left.endCharacter));
+		let furthestEnd: { line: number; character: number } | undefined;
+		for (const item of sorted) {
+			if (furthestEnd && comparePosition(item.startLine, item.startCharacter, furthestEnd.line, furthestEnd.character) < 0) {
+				reasons.push(`overlapping text edits in ${file.path}`);
+				break;
+			}
+			if (!furthestEnd || comparePosition(item.endLine, item.endCharacter, furthestEnd.line, furthestEnd.character) > 0) {
+				furthestEnd = { line: item.endLine, character: item.endCharacter };
+			}
+		}
+	}
 	if (reasons.length > 0) return { verdict: "rejected", reasons, warnings: [] };
 
 	const pathsWithEdits = new Set<string>();
@@ -225,6 +241,11 @@ function parseEdit(value: unknown): NormalizedEdit | undefined {
 	const endCharacter = value.range.end.character;
 	if (!isCoordinate(startLine) || !isCoordinate(startCharacter) || !isCoordinate(endLine) || !isCoordinate(endCharacter)) return undefined;
 	return { startLine, startCharacter, endLine, endCharacter, newText: value.newText };
+}
+
+/** Compare zero-based LSP positions lexicographically by line, then character. */
+function comparePosition(leftLine: number, leftCharacter: number, rightLine: number, rightCharacter: number): number {
+	return leftLine - rightLine || leftCharacter - rightCharacter;
 }
 
 function isCoordinate(value: unknown): value is number {
