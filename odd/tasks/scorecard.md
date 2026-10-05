@@ -52,39 +52,41 @@ transcript. User chose default **Off** when config omits the flag.
 ## Tasks
 
 ### S1 — Config surface: top-level scorecard flag (test-first)
-- [ ] RED: scorecard key dropped by merge today; non-boolean accepted today
-- [ ] GREEN: schema top-level `scorecard` boolean; `SourceConfig.scorecard?`;
-      `ConfigLayer` + `mergeConfig` threading; validate boolean check
-      (`/scorecard: must be a boolean`); merge layering + omitted-keeps-off
-      regressions; load accepts true / rejects `"yes"`
+- [x] RED observed: scorecard key dropped by merge; non-boolean accepted
+- [x] GREEN: schema top-level `scorecard` boolean; `SourceConfig.scorecard?`;
+      `ConfigLayer` + `mergeConfig` threading (`project ?? global ?? defaults`);
+      validate boolean check (`/scorecard: must be a boolean`); merge
+      layering + omitted-keeps-off regressions
 - Route: delegated (gentle-ai-worker).
 
 ### S2 — Pure scorecard module (test-first)
-- [ ] RED: module absent
-- [ ] GREEN: `src/diagnostics/scorecard.ts` `computeScorecard(...)` per design:
-      severity counts; baseline presence; freshness gating; delta only when
-      current; honest stale/unknown labels; caps + truncation markers;
-      empty-input ⇒ empty result
-- [ ] Tests: counts correct across severities; stale baseline ⇒ no delta
-      claims; unknown version ⇒ unknown; caps truncate with marker; baseline
-      absent ⇒ counts only
+- [x] RED observed: module absent (import failure)
+- [x] GREEN: `src/diagnostics/scorecard.ts` `computeScorecard` — severity
+      counts (1–4 mapped, invalid skipped fail-safe), baseline presence,
+      `freshnessOf` gating (null/undefined version ⇒ unknown), delta only
+      when baseline exists AND freshness current, document-level caps with
+      truncation markers, final `…` fallback, empty input ⇒ empty result
+- [x] Tests: counts across severities; stale ⇒ no delta claims; unknown
+      version ⇒ unknown; caps truncate; no baseline ⇒ counts only
 - Route: delegated (gentle-ai-worker).
 
 ### S3 — Turn recorder + agent_settled hook + renderer (test-first)
-- [ ] RED: no `agent_settled` handler; no entry appended
-- [ ] GREEN: extension closure records edit/write-activated pairs (reads
-      excluded); `agent_settled` computes via S2 and `appendEntry`s once;
-      returns `undefined`; disabled when flag off/absent; `disposed` gates;
-      recorder cleared after emit; renderer registered (typeof-guarded)
-- [ ] Hook tests with a local fake Pi API (on/appendEntry/
-      registerEntryRenderer captures): registered once; appends exactly one
-      entry per settle with edit activity; nothing when disabled, disposed,
-      or no edit activity; returns undefined
-- [ ] Checks: typecheck, lint, full suite, build, `git diff --check`
+- [x] RED observed: no `agent_settled` handler; no `appendEntry`
+- [x] GREEN: edit-only recorder via `matchServers` (reads excluded,
+      store-key-format map); `agent_settled` computes and appends exactly one
+      entry when documents exist, returns `undefined` always; disabled when
+      flag off/absent (checked at record AND emit); `disposed` gates;
+      recorder cleared after emit and on shutdown; renderer registered
+      typeof-guarded at factory; pooled-client `documents.version(uri)`
+      lookup (absent client ⇒ undefined ⇒ unknown)
+- [x] Checks: 430 tests / 45 files passing; lint 0; typecheck clean; build
+      clean; `git diff --check` clean (independently re-run by
+      gentle-ai-verify; mutation check byte-identical)
 - Route: delegated (gentle-ai-worker).
 
 ### S4 — README
-- [ ] Document `scorecard` (default false) in the diagnostics section.
+- [x] "Turn-end scorecard" section: default false, display-only, never sent
+      to model, caps + truncation markers, no entry without edit activity
 - Route: parent (docs).
 
 ## Non-goals
@@ -113,6 +115,14 @@ transcript. User chose default **Off** when config omits the flag.
   confirmed via question). Design inputs scouted; mechanism locked
   (`agent_settled` + `appendEntry` + renderer). Branch created. S1–S3
   delegated.
+- 2026-10-05: S1–S3 complete via one worker task; worker caught and fixed an
+  explicit `any` for lint. Parent spot checks: scorecard.ts caps arithmetic
+  and freshness gating; extension.ts recorder/handler/disposed/renderer;
+  config threading through the fixed-shape merge. Work units: 7f0903d
+  (config), d621a29 (module), f22c906 (wiring), 8d5ac25 (README, parent).
+  Accepted nuances: documents whose snapshots never published are omitted
+  (never reported as clean); severity values outside 1–4 are skipped, not
+  fabricated.
 
 ## Review record
 
