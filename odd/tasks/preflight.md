@@ -131,4 +131,13 @@ existing `tool_result` combine path.
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-f7c98ab618b61d61`, medium tier
+  (`configuration_change` on `schema/lsp.schema.json`), review-reliability
+  lens, 12 paths / 459 lines, correction budget 200, base
+  `9b4a0c5c55636db3d06f3c56d4794598a5a56829` (committedOnly). Reviewer
+  forecast (1 host-relay run) acknowledged; approved on the last admitted
+  event; acknowledgement burned (consumed revision `sha256:15b39668…`).
+  One NON-BLOCKING informational advisory: R3-001 reliability WARNING at
+  `src/extension.ts:102-104` (preflightNotes stash-cap eviction with
+  non-null assertion; advisory-ledger item for later work — does not
+  reopen this review). Delivery: ordinary repository policy.
