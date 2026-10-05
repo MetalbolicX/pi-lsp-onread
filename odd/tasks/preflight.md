@@ -111,7 +111,7 @@ existing `tool_result` combine path.
 - Workers never commit; parent reviews hunks, verifies via `gentle-ai-verify`,
   and commits.
 - RDD: slice review at close with explicit committed base
-  (`9b4a0c5` full SHA: `9b4a0c5` — resolve full 40-char at review time).
+  (`9b4a0c5c55636db3d06f3c56d4794598a5a56829` full SHA).
 - Merge/push/PR remain user decisions.
 
 ## Progress log
