@@ -14,6 +14,9 @@ export function validateEffectiveConfig(value: unknown): EffectiveValidationResu
 	if (value.scorecard !== undefined && typeof value.scorecard !== "boolean") {
 		errors.push("/scorecard: must be a boolean");
 	}
+	if (value.preflight !== undefined && !["off", "advisory", "block"].includes(value.preflight as string)) {
+		errors.push('/preflight: must be one of "off", "advisory", "block"');
+	}
 	const rawLsp = value.lsp;
 	if (rawLsp !== false && !isObject(rawLsp)) {
 		return { ok: false, errors: ["/lsp: merged server map must be an object or false"] };

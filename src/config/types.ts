@@ -1,6 +1,7 @@
 export type Severity = "error" | "warning" | "information" | "hint";
 export type OnReadPolicy = "cached" | "off";
 export type OnChangePolicy = "wait" | "cached" | "off";
+export type PreflightPolicy = "off" | "advisory" | "block";
 
 export interface DiagnosticsConfig {
 	onRead?: OnReadPolicy;
@@ -38,6 +39,7 @@ export interface ServerConfig {
 export interface SourceConfig {
 	version: 1;
 	scorecard?: boolean;
+	preflight?: PreflightPolicy;
 	lsp?: false | Record<string, ServerConfig>;
 	diagnostics?: DiagnosticsConfig;
 	"$schema"?: string;
@@ -65,6 +67,7 @@ export type EffectiveServerConfig =
 export interface EffectiveConfig {
 	version: 1;
 	scorecard?: boolean;
+	preflight?: PreflightPolicy;
 	lsp: false | Record<string, EffectiveServerConfig>;
 	diagnostics: DiagnosticsPolicy;
 }
@@ -74,6 +77,7 @@ export interface MergedServerConfig extends ServerConfig {}
 export interface MergedConfig {
 	version: 1;
 	scorecard?: boolean;
+	preflight?: PreflightPolicy;
 	lsp: false | Record<string, MergedServerConfig>;
 	diagnostics: DiagnosticsConfig;
 }

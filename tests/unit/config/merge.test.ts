@@ -47,6 +47,12 @@ describe("configuration merging", () => {
 		expect(mergeConfig(defaults).scorecard).toBeUndefined();
 	});
 
+	it("layers preflight without injecting an absent default", () => {
+		expect(mergeConfig(defaults, { preflight: "block" }, { preflight: "advisory" }).preflight).toBe("advisory");
+		expect(mergeConfig(defaults, { preflight: "block" }, { preflight: "off" }).preflight).toBe("off");
+		expect(mergeConfig(defaults).preflight).toBeUndefined();
+	});
+
 	it("layers prewarm and keeps omitted prewarm off", () => {
 		const config = mergeConfig(defaults, { lsp: { ts: { prewarm: true } } }, { lsp: { ts: { prewarm: false } } });
 		expect(config.lsp).toMatchObject({ ts: { prewarm: false } });

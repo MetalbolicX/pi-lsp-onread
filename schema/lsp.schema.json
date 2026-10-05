@@ -18,6 +18,10 @@
 			"type": "boolean",
 			"description": "Append a bounded diagnostic scorecard at the end of edited turns (default false)."
 		},
+		"preflight": {
+			"enum": ["off", "advisory", "block"],
+			"description": "Check current diagnostics before edits: advisory by default, optionally block on current errors, or off."
+		},
 		"lsp": {
 			"description": "Map of server id to server definition, or false to disable every LSP server. No servers are enabled by default; activation happens on the first matching read/edit/write.",
 			"oneOf": [

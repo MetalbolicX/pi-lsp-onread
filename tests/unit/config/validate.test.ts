@@ -30,6 +30,16 @@ describe("merged configuration validation", () => {
 		if (!result.ok) expect(result.errors).toContain("/scorecard: must be a boolean");
 	});
 
+	it("rejects preflight values outside its enum", () => {
+		const result = validateEffectiveConfig({ version: 1, lsp: false, preflight: "sometimes" });
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.errors).toContain('/preflight: must be one of "off", "advisory", "block"');
+	});
+
+	it.each(["off", "advisory", "block"])("accepts preflight mode %s", (preflight) => {
+		expect(validateEffectiveConfig({ version: 1, lsp: false, preflight }).ok).toBe(true);
+	});
+
 	it("rejects non-boolean prewarm with its server field path", () => {
 		const result = validateEffectiveConfig({ version: 1, lsp: {
 			myServer: { command: ["server"], extensions: [".ts"], languageId: "typescript", prewarm: "yes" },
