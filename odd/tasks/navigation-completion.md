@@ -58,24 +58,43 @@ grep (implementation: 0, typeDefinition: 0, callHierarchy: 0 hits in
 ## Tasks
 
 ### N1 — Implementation + typeDefinition (test-first)
-- [ ] RED: session methods absent / fixture handlers absent
-- [ ] GREEN: two session methods, `NavigationKind` extension, two thin
-      registrations + extension wiring, fixture handlers under
-      FAKE_NAVIGATION, tests (supported/unsupported/null-empty/kind
-      naming/line structure)
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed: 16 focused failures (`implementation()`/`typeDefinition()`
+      absent, fixture handlers absent)
+- [x] GREEN: shared `navigationLocations` helper (capability gate, null ⇒
+      ok empty, Location|Array|LocationLink normalization, 1000 cap,
+      never-throws) behind `implementation()`/`typeDefinition()`;
+      `NavigationKind` extended; `lsp_implementation` +
+      `lsp_type_definition` thin registrations (shared `definitionParams`);
+      extension wiring; fixture handlers under FAKE_NAVIGATION with
+      distinct target files; tests
+- Route: delegated (gentle-ai-worker), commit `21ccad6` (with N2 — shared
+  files made per-task splits dishonest; one coherent behavior unit).
 
 ### N2 — Call hierarchy (test-first)
-- [ ] RED: no prepare/calls path anywhere
-- [ ] GREEN: session prepare + calls methods, `lsp_call_hierarchy` tool
-      (modes, item contract, bounds), fixture FAKE_CALL_HIERARCHY handlers,
-      tests (prepare listing, incoming/outgoing, missing-item remedy line,
-      unsupported, cap, line structure)
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed: no prepare/calls path (missing registration + session
+      method)
+- [x] GREEN: `prepareCallHierarchy` + `callHierarchyCalls` (direction-literal,
+      gated `callHierarchyProvider`, 1000 cap, never-throws);
+      `lsp_call_hierarchy` tool — mode validation, missing-item remedy line
+      BEFORE activation, prepare listing (index/name/kind/detail/file:line:char)
+      + verbatim-item footer, incoming/outgoing sections, footer-preserving
+      char truncation, `symbolKindName` local map (no exported helper
+      existed), FAKE_CALL_HIERARCHY fixture flag with handlers
+- [x] Tests: `tests/unit/pi/lsp-call-hierarchy.test.ts` (prepare, both
+      directions, remedy, unsupported, bounds, line structure)
+- Route: delegated (gentle-ai-worker), commit `21ccad6`.
 
 ### N3 — Docs + closure (parent)
-- [ ] README bullets for both additions; closure evidence; battery; commits;
-      slice review; record
+- [x] Parent integration fixes: misplaced JSDoc relocated;
+      **count-cap honesty marker added** (`… N more entries omitted (cap 100)`)
+      — the worker's >100 slice dropped silently against project norm
+- [x] README: definition/references bullet extended with
+      `lsp_implementation`/`lsp_type_definition`; new Call hierarchy bullet
+      (modes, item contract, bounds, never-executes)
+- [x] Battery (gentle-ai-verify): 478 tests / 48 files (+25), lint 0,
+      typecheck clean, build clean, `git diff --check` clean,
+      mutation-clean
+- [x] Work units: `21ccad6` (behavior), `7d9c141` (README)
 - Route: parent.
 
 ## Non-goals
@@ -103,6 +122,12 @@ grep (implementation: 0, typeDefinition: 0, callHierarchy: 0 hits in
   formatLocations export; fixture navigation gate :169/:181; nav tool tests
   8 its. Branch created; N1+N2 delegated as one sequential worker task
   (surfaces overlap, so not parallel).
+- 2026-10-07: worker returned full-battery green (478/48) with per-task RED
+  evidence and 371 authored lines. Parent spot-check: session helper
+  mirrors definition normalization; call-hierarchy tool remedies/routing/
+  truncation verified; two parent fixes (JSDoc, count-cap marker) + README.
+  Independent battery 5/5 green. Honest deviation: slice totals +484/−12
+  over 9 files (plan doc included) — above the ~400 advisory, recorded.
 
 ## Review record
 
