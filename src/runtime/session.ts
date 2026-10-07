@@ -302,6 +302,25 @@ export class RuntimeSession {
 		}
 	}
 
+	async resolveInlayHint(serverId: string, hint: unknown, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; hint: unknown }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			const provider = client?.capabilities()?.inlayHintProvider;
+			if (!client || !provider || typeof provider !== "object" || Array.isArray(provider)
+				|| (provider as { resolveProvider?: unknown }).resolveProvider !== true) {
+				return { outcome: "unsupported", hint };
+			}
+			if (timeoutMs <= 0) return { outcome: "failed", hint };
+			const response = await client.request<unknown>("inlayHint/resolve", hint, timeoutMs);
+			if (!response.ok || !response.value || typeof response.value !== "object" || Array.isArray(response.value)) {
+				return { outcome: "failed", hint };
+			}
+			return { outcome: "ok", hint: response.value };
+		} catch {
+			return { outcome: "failed", hint };
+		}
+	}
+
 	async definition(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
 		try {
 			const client = this.matchedClient(serverId, suppliedClient);

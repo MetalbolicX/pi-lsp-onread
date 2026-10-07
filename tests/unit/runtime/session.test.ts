@@ -178,6 +178,44 @@ describe("RuntimeSession", () => {
 		} finally { await session.dispose(); }
 	});
 
+	it("resolves inlay hints when the server advertises resolve support", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const hint = { position: { line: 0, character: 1 }, label: "name" };
+		let requestArgs: unknown[] = [];
+		const resolved = { ...hint, tooltip: "parameter name" };
+		const client = {
+			capabilities: () => ({ inlayHintProvider: { resolveProvider: true } }),
+			request: async (...args: unknown[]) => { requestArgs = args; return { ok: true, value: resolved }; },
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.resolveInlayHint("fake", hint, 1234, client)).toEqual({ outcome: "ok", hint: resolved });
+			expect(requestArgs).toEqual(["inlayHint/resolve", hint, 1234]);
+		} finally { await session.dispose(); }
+	});
+
+	it("does not resolve without explicit provider support and preserves the hint on failures", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const hint = { position: { line: 0, character: 1 }, label: "name" };
+		let requested = false;
+		const client = {
+			capabilities: () => ({ inlayHintProvider: true }),
+			request: async () => { requested = true; return { ok: false }; },
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.resolveInlayHint("fake", hint, 1000, client)).toEqual({ outcome: "unsupported", hint });
+			expect(requested).toBe(false);
+			const capable = { ...client, capabilities: () => ({ inlayHintProvider: { resolveProvider: true } }) } as unknown as LspClient;
+			expect(await session.resolveInlayHint("fake", hint, 0, capable)).toEqual({ outcome: "failed", hint });
+			expect(requested).toBe(false);
+			expect(await session.resolveInlayHint("fake", hint, 1000, capable)).toEqual({ outcome: "failed", hint });
+			expect(requested).toBe(true);
+		} finally { await session.dispose(); }
+	});
+
 	it("returns changed snapshots at or after the timestamp in uri then server order", async () => {
 		const { projectRoot, trustStorePath } = await setup();
 		let now = 10;

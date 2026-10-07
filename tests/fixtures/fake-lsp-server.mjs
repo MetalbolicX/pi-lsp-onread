@@ -10,6 +10,7 @@ const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
+const inlayHintResolve = process.env.FAKE_INLAY_HINT_RESOLVE === "1";
 const rename = process.env.FAKE_RENAME === "1";
 const formatting = process.env.FAKE_FORMATTING === "1";
 const renameBoolean = process.env.FAKE_RENAME_BOOLEAN === "1";
@@ -115,7 +116,7 @@ function handle(message) {
 			capabilities.referencesProvider = true;
 		}
 		capabilities.hoverProvider = true;
-		capabilities.inlayHintProvider = true;
+		capabilities.inlayHintProvider = inlayHintResolve ? { resolveProvider: true } : true;
 		if (codeActions) capabilities.codeActionProvider = { resolveProvider: true };
 		if (rename) capabilities.renameProvider = { prepareProvider: true };
 		if (formatting) capabilities.documentFormattingProvider = true;
@@ -237,6 +238,13 @@ function handle(message) {
 			...(document.text.split("\n").length > 1 ? [{ position: { line: 1, character: 0 }, label: [{ value: " -> " }, { text: "result" }] }] : []),
 		].filter(({ position }) => start && end && position.line >= start.line && position.line < end.line) : [];
 		send({ jsonrpc: "2.0", id: message.id, result: hints });
+	} else if (message.method === "inlayHint/resolve" && inlayHintResolve) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const hint = message.params;
+		const label = typeof hint?.label === "string" ? hint.label : "result";
+		const tooltip = label === "string" ? "fixture type tooltip"
+			: label === "argument" ? "fixture parameter tooltip" : "fixture result tooltip";
+		send({ jsonrpc: "2.0", id: message.id, result: { ...hint, tooltip } });
 	} else if (message.method === "textDocument/documentSymbol" && documentSymbols) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const text = documents.get(message.params.textDocument.uri)?.text;
