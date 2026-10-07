@@ -417,6 +417,20 @@ describe("RuntimeSession", () => {
 			invoke: (session: RuntimeSession, client: LspClient, timeoutMs = 1234, includeDeclaration = true) => session.references("fake", "file:///target.ts", -2, 19, includeDeclaration, timeoutMs, client),
 			params: { textDocument: { uri: "file:///target.ts" }, position: { line: -2, character: 19 }, context: { includeDeclaration: true } },
 		},
+		{
+			name: "implementation",
+			capability: "implementationProvider",
+			method: "textDocument/implementation",
+			invoke: (session: RuntimeSession, client: LspClient, timeoutMs = 1234) => session.implementation("fake", "file:///target.ts", -2, 19, timeoutMs, client),
+			params: { textDocument: { uri: "file:///target.ts" }, position: { line: -2, character: 19 } },
+		},
+		{
+			name: "typeDefinition",
+			capability: "typeDefinitionProvider",
+			method: "textDocument/typeDefinition",
+			invoke: (session: RuntimeSession, client: LspClient, timeoutMs = 1234) => session.typeDefinition("fake", "file:///target.ts", -2, 19, timeoutMs, client),
+			params: { textDocument: { uri: "file:///target.ts" }, position: { line: -2, character: 19 } },
+		},
 	])("$name requests", ({ name, capability, method, invoke, params }) => {
 		async function setupRequest(value: unknown, requestOk = true) {
 			const { projectRoot, trustStorePath } = await setup();
@@ -518,6 +532,25 @@ describe("RuntimeSession", () => {
 		const client = { capabilities: () => ({ referencesProvider: true }), request: async () => ({ ok: true, value: { uri: "file:///reference.ts" } }), documents: { version: () => undefined } } as unknown as LspClient;
 		try { expect(await session.references("fake", "file:///target.ts", 0, 0, true, 1000, client)).toEqual({ outcome: "failed", locations: [] }); }
 		finally { await session.dispose(); }
+	});
+
+	describe("call hierarchy requests", () => {
+		it("prepares items and requests calls with the exact item", async () => {
+			const { projectRoot, trustStorePath } = await setup();
+			const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+			const item = { name: "alpha", kind: 12 };
+			const results = [[item], [{ from: item, fromRanges: [] }]];
+			const args: unknown[][] = [];
+			const client = { capabilities: () => ({ callHierarchyProvider: true }), request: async (...received: unknown[]) => { args.push(received); return { ok: true, value: results.shift() }; }, documents: { version: () => undefined } } as unknown as LspClient;
+			try {
+				expect(await session.prepareCallHierarchy("fake", "file:///target.ts", 2, 3, 1234, client)).toEqual({ outcome: "ok", items: [item] });
+				expect(await session.callHierarchyCalls("fake", "incoming", item, 1234, client)).toEqual({ outcome: "ok", calls: [{ from: item, fromRanges: [] }] });
+				expect(args).toEqual([
+					["textDocument/prepareCallHierarchy", { textDocument: { uri: "file:///target.ts" }, position: { line: 2, character: 3 } }, 1234],
+					["callHierarchy/incomingCalls", { item }, 1234],
+				]);
+			} finally { await session.dispose(); }
+		});
 	});
 
 	describe("codeActions requests", () => {

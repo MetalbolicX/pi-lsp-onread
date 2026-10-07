@@ -53,6 +53,8 @@ async function setup(options: { trusted?: boolean; navigation?: boolean } = {}) 
 		session,
 		createSession,
 		definition: pi.tools.get("lsp_definition"),
+		implementation: pi.tools.get("lsp_implementation"),
+		typeDefinition: pi.tools.get("lsp_type_definition"),
 		references: pi.tools.get("lsp_references"),
 	};
 }
@@ -64,9 +66,9 @@ async function execute(tool: Tool | undefined, path: string, line: number, chara
 }
 
 describe("LSP navigation tools", () => {
-	it("registers both tools with read-only intent and position schemas", async () => {
-		const { definition, references } = await setup();
-		for (const tool of [definition, references]) {
+	it("registers navigation tools with read-only intent and position schemas", async () => {
+		const { definition, implementation, typeDefinition, references } = await setup();
+		for (const tool of [definition, implementation, typeDefinition, references]) {
 			expect(tool).toBeDefined();
 			if (!tool) throw new Error("Expected navigation tool to be registered");
 			expect(tool.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
@@ -114,8 +116,21 @@ describe("LSP navigation tools", () => {
 	});
 
 	it("reports unsupported navigation providers", async () => {
-		const { filePath, projectRoot, definition } = await setup();
+		const { filePath, projectRoot, definition, implementation, typeDefinition } = await setup();
 		expect(await execute(definition, filePath, 1, 1, projectRoot)).toContain("fake does not support definition");
+		expect(await execute(implementation, filePath, 1, 1, projectRoot)).toContain("fake does not support implementation");
+		expect(await execute(typeDefinition, filePath, 1, 1, projectRoot)).toContain("fake does not support typeDefinition");
+	});
+
+	it.each([
+		["implementation", "implementation", ".implementation.ts"],
+		["type definition", "typeDefinition", ".type-definition.ts"],
+	])("returns the distinct %s target and coverage", async (_label, kind, suffix) => {
+		const { filePath, projectRoot, [kind === "implementation" ? "implementation" : "typeDefinition"]: tool } = await setup({ navigation: true });
+		await writeFile(filePath, "first line\nsecond line\n");
+		const output = await execute(tool, filePath, 2, 4, projectRoot);
+		expect(output).toContain(`${filePath}${suffix}:2:4-2:4`);
+		expect(output).toContain("coverage: 1 server(s) queried for this position;");
 	});
 
 	it.each([[0, 1], [1, 1.5]])("rejects invalid position %s:%s", async (line, character) => {

@@ -9,6 +9,7 @@ const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
 const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
+const callHierarchy = process.env.FAKE_CALL_HIERARCHY === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
 const inlayHintResolve = process.env.FAKE_INLAY_HINT_RESOLVE === "1";
 const rename = process.env.FAKE_RENAME === "1";
@@ -111,9 +112,12 @@ function handle(message) {
 		}
 		if (documentSymbols) capabilities.documentSymbolProvider = true;
 		if (workspaceSymbols) capabilities.workspaceSymbolProvider = true;
+		if (callHierarchy) capabilities.callHierarchyProvider = true;
 		if (navigation) {
 			capabilities.definitionProvider = true;
 			capabilities.referencesProvider = true;
+			capabilities.implementationProvider = true;
+			capabilities.typeDefinitionProvider = true;
 		}
 		capabilities.hoverProvider = true;
 		capabilities.inlayHintProvider = inlayHintResolve ? { resolveProvider: true } : true;
@@ -169,7 +173,7 @@ function handle(message) {
 	} else if (message.method === "textDocument/definition" && navigation) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const { uri, text } = documents.get(message.params.textDocument.uri) ?? {};
-		const line = message.params.position?.line;
+		const { line } = message.params.position ?? {};
 		if (text === undefined || !Number.isInteger(line) || line < 0 || line >= text.split("\n").length) {
 			send({ jsonrpc: "2.0", id: message.id, result: null });
 			return;
@@ -178,10 +182,23 @@ function handle(message) {
 		const character = Number.isInteger(position.character) && position.character >= 0 ? position.character : 0;
 		const point = { line, character };
 		send({ jsonrpc: "2.0", id: message.id, result: { uri, range: { start: point, end: point } } });
+	} else if ((message.method === "textDocument/implementation" || message.method === "textDocument/typeDefinition") && navigation) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const text = documents.get(uri)?.text;
+		const { line, character } = message.params.position ?? {};
+		if (text === undefined || !Number.isInteger(line) || line < 0 || line >= text.split("\n").length) {
+			send({ jsonrpc: "2.0", id: message.id, result: null });
+			return;
+		}
+		const suffix = message.method === "textDocument/implementation" ? ".implementation.ts" : ".type-definition.ts";
+		const point = { line, character: character ?? 0 };
+		send({ jsonrpc: "2.0", id: message.id, result: { uri: `${uri}${suffix}`, range: { start: point, end: point } } });
 	} else if (message.method === "textDocument/references" && navigation) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
-		const { uri, text } = documents.get(message.params.textDocument.uri) ?? {};
-		const line = message.params.position?.line;
+		const { uri } = message.params.textDocument;
+		const { text } = documents.get(uri) ?? {};
+		const { line } = message.params.position ?? {};
 		if (text === undefined || !Number.isInteger(line) || line < 0 || line >= text.split("\n").length) {
 			send({ jsonrpc: "2.0", id: message.id, result: [] });
 			return;
@@ -191,6 +208,27 @@ function handle(message) {
 			uri,
 			range: { start: { line: index, character: 0 }, end: { line: index, character: content.length } },
 		}));
+		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/prepareCallHierarchy" && callHierarchy) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const text = documents.get(uri)?.text ?? "";
+		const items = text.split("\n").flatMap((content, line) => {
+			const match = content.match(/function (\w+)/);
+			if (!match) return [];
+			const start = content.indexOf(match[1]);
+			const range = { start: { line, character: start }, end: { line, character: start + match[1].length } };
+			return [{ name: match[1], kind: 12, detail: "fixture function detail", uri, range, selectionRange: range }];
+		}).slice(0, 2);
+		send({ jsonrpc: "2.0", id: message.id, result: items });
+	} else if ((message.method === "callHierarchy/incomingCalls" || message.method === "callHierarchy/outgoingCalls") && callHierarchy) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { item } = message.params;
+		const point = { line: 0, character: 0 };
+		const peer = { ...item, name: `${item?.name ?? "function"}Peer`, selectionRange: { start: point, end: point } };
+		const result = message.method.endsWith("incomingCalls")
+			? [{ from: peer, to: item, fromRanges: [item?.selectionRange ?? { start: point, end: point }] }]
+			: [{ from: item, to: peer, fromRanges: [item?.selectionRange ?? { start: point, end: point }] }];
 		send({ jsonrpc: "2.0", id: message.id, result });
 	} else if (message.method === "textDocument/prepareRename" && (rename || renameBoolean)) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;

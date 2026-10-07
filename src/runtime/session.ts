@@ -321,6 +321,30 @@ export class RuntimeSession {
 		}
 	}
 
+	async implementation(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
+		return this.navigationLocations(serverId, "textDocument/implementation", "implementationProvider", uri, line, character, timeoutMs, suppliedClient);
+	}
+
+	async typeDefinition(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
+		return this.navigationLocations(serverId, "textDocument/typeDefinition", "typeDefinitionProvider", uri, line, character, timeoutMs, suppliedClient);
+	}
+
+	private async navigationLocations(serverId: string, method: string, capability: "implementationProvider" | "typeDefinitionProvider", uri: string, line: number, character: number, timeoutMs: number, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.[capability]) return { outcome: "unsupported", locations: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", locations: [] };
+			const response = await client.request<unknown>(method, { textDocument: { uri }, position: { line, character } }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", locations: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", locations: [] };
+			if (Array.isArray(response.value)) return { outcome: "ok", locations: response.value.slice(0, 1000) };
+			if (typeof response.value === "object") return { outcome: "ok", locations: [response.value] };
+			return { outcome: "failed", locations: [] };
+		} catch {
+			return { outcome: "failed", locations: [] };
+		}
+	}
+
 	async definition(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {
 		try {
 			const client = this.matchedClient(serverId, suppliedClient);
@@ -432,6 +456,32 @@ export class RuntimeSession {
 		} catch {
 			return { outcome: "failed", hints: [] };
 		}
+	}
+
+	async prepareCallHierarchy(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; items: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.callHierarchyProvider) return { outcome: "unsupported", items: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", items: [] };
+			const response = await client.request<unknown>("textDocument/prepareCallHierarchy", { textDocument: { uri }, position: { line, character } }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", items: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", items: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", items: [] };
+			return { outcome: "ok", items: response.value.slice(0, 1000) };
+		} catch { return { outcome: "failed", items: [] }; }
+	}
+
+	async callHierarchyCalls(serverId: string, direction: "incoming" | "outgoing", item: unknown, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; calls: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.callHierarchyProvider) return { outcome: "unsupported", calls: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", calls: [] };
+			const response = await client.request<unknown>(`callHierarchy/${direction}Calls`, { item }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", calls: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", calls: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", calls: [] };
+			return { outcome: "ok", calls: response.value.slice(0, 1000) };
+		} catch { return { outcome: "failed", calls: [] }; }
 	}
 
 	async references(serverId: string, uri: string, line: number, character: number, includeDeclaration: boolean, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; locations: unknown[] }> {

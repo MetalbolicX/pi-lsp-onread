@@ -13,7 +13,7 @@ import { registerLspHoverTool } from "./pi/lsp-hover-tool.js";
 import { registerLspInlayHintsTool } from "./pi/lsp-inlay-hints-tool.js";
 import { registerLspRenameTool } from "./pi/lsp-rename-tool.js";
 import { registerLspFormattingTool } from "./pi/lsp-formatting-tool.js";
-import { registerLspDefinitionTool, registerLspReferencesTool } from "./pi/lsp-navigation-tools.js";
+import { registerLspCallHierarchyTool, registerLspDefinitionTool, registerLspImplementationTool, registerLspReferencesTool, registerLspTypeDefinitionTool } from "./pi/lsp-navigation-tools.js";
 import { registerLspSymbolsTool } from "./pi/lsp-symbols-tool.js";
 import { registerLspWorkspaceSymbolsTool } from "./pi/lsp-workspace-symbols-tool.js";
 import { computeScorecard } from "./diagnostics/scorecard.js";
@@ -55,6 +55,9 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 		const logError = options.logError ?? ((message, error) => console.warn(message, error));
 		if (typeof pi.registerTool === "function") registerLspDiagnosticsTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspDefinitionTool(pi, getSession);
+		if (typeof pi.registerTool === "function") registerLspImplementationTool(pi, getSession);
+		if (typeof pi.registerTool === "function") registerLspTypeDefinitionTool(pi, getSession);
+		if (typeof pi.registerTool === "function") registerLspCallHierarchyTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspReferencesTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspCodeActionsTool(pi, getSession);
 		if (typeof pi.registerTool === "function") registerLspOrganizeImportsTool(pi, getSession);
