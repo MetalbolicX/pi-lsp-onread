@@ -47,21 +47,35 @@ merge".
 ## Tasks
 
 ### S1 — Malformed hierarchy naming (test-first)
-- [ ] RED: malformed `from`/`to` renders `(unnamed)` today
-- [ ] GREEN: `(malformed source)` / `(malformed target)`; fixture flag;
-      line-structure assertions
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed verbatim: expected `(malformed source) → target — ? → …`,
+      observed `(unnamed) → target — :1:1 → …`
+- [x] GREEN: `fromIsRecord`/`toIsRecord` computed once; markers
+      `(malformed source)`/`(malformed target)` with `?` positional
+      fallbacks (arrow line structure preserved); top-level
+      `… unreadable hierarchy entry omitted` guard and prepare-mode
+      rendering untouched; fixture `FAKE_MALFORMED_HIERARCHY` adds one
+      non-object `from` and one non-object `to` to incomingCalls only
+- [x] Focused: 15/15 navigation tests
+- Route: delegated (gentle-ai-worker), commit `bbbd85f`.
 
 ### S2 — Concurrent inlay tooltip resolves (test-first)
-- [ ] RED: resolves start only after the previous completes (sequential)
-- [ ] GREEN: bounded concurrent batch, failure isolation preserved,
-      attempt cap preserved
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed verbatim: expected three resolves started before any
+      completed; observed one (sequential) — deterministic deferred-promise
+      session mock as designed
+- [x] GREEN: `Promise.all` over `map` — `resolveAttempts` increments
+      synchronously before each await (cap of 20 exact), per-hint try/catch
+      keeps failure isolation, array order preserved (reverse-completion
+      test asserted), non-eligible hints untouched
+- [x] Focused: 9/9 inlay tests incl. cap/failure regression
+- Route: delegated (gentle-ai-worker), commit `559ed3f`.
 
 ### S3 — Verification + merge (parent)
-- [ ] Full battery; work-unit commits; closure; slice review + record;
-      ff-merge chain (capabilities-completion + sweep) to `main`; post-merge
-      battery
+- [x] Battery run TWICE for the worker-reported transient (prewarm test):
+      489/49 green on BOTH runs, unreproduced — recorded honestly (2 runs
+      bound but cannot disprove a load-dependent flake); lint, typecheck,
+      build, `git diff --check` all clean; mutation-clean
+- [x] Work units: `bbbd85f` (S1), `559ed3f` (S2)
+- [ ] Closure + slice review + record; ff-merge chain; post-merge battery
 - Route: parent.
 
 ## Non-goals
@@ -84,6 +98,12 @@ merge".
 
 - 2026-10-07: authorized ("Do the advisory sweep and merge"). Design locked;
   branch created; S1+S2 delegated as one sequential worker task.
+- 2026-10-07: both tasks GREEN with verbatim REDs (genuine: sequential-start
+  observation proves S2). Parent spot-check: S1 markers + `?` fallbacks
+  structurally sound, guards untouched; S2 cap increments synchronously
+  pre-await (cap exact at 20), Promise.all ordering + isolation verified.
+  Battery twice: 489/49 both runs; transient prewarm failure unreproduced
+  (recorded as unproven). Commits bbbd85f + 559ed3f.
 
 ## Review record
 
