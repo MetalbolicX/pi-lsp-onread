@@ -129,4 +129,12 @@ approved navigation/inlay/call-hierarchy precedents.
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-e3943a1feb0ea7b1`, medium tier
+  (`executable_change` on `src/extension.ts`), review-reliability lens,
+  10 paths / 672 lines, correction budget 200, base
+  `6c8f2013c3e0729b66aaacc39d9dea553f797764` (committedOnly). One stale
+  consent binding (expired, no lineage) recovered with a fresh
+  idempotency key. Reviewer forecast (1 host-relay run) acknowledged;
+  approved on the last admitted event with **ZERO findings**;
+  acknowledgement burned (consumed revision `sha256:33207073…`).
+  Delivery: ordinary repository policy.
