@@ -97,6 +97,34 @@ describe("preflight tool_call hook", () => {
 		expect(logError).toHaveBeenCalled();
 	});
 
+	it("evicts the oldest advisory at the cap and preserves refreshes", async () => {
+		const pi = fakePi();
+		const session = mockSession("advisory");
+		const diagnostics = session.diagnostics as DiagnosticsStore;
+		for (let index = 0; index <= 100; index++) {
+			const name = `file-${String(index).padStart(3, "0")}.ts`;
+			diagnostics.record({ serverId: "ts", uri: `file:///project/${name}`, version: 1, receivedAt: 0, items: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 1, message: "before edit" }] } satisfies Snapshot);
+		}
+		createExtension({ createSession: vi.fn(async () => session as never) })(pi as never);
+		await pi.handlers.get("session_start")![0]!({}, { cwd: "/project" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const call = pi.handlers.get("tool_call")![0]!;
+		const result = pi.handlers.get("tool_result")![0]!;
+		for (let index = 0; index < 100; index++) await call({ toolName: "edit", input: { path: `file-${String(index).padStart(3, "0")}.ts` } }, { cwd: "/project" });
+		await call({ toolName: "edit", input: { path: "file-050.ts" } }, { cwd: "/project" });
+		await call({ toolName: "edit", input: { path: "file-100.ts" } }, { cwd: "/project" });
+		const oldest = await result({ toolName: "edit", input: { path: "file-000.ts" }, content: [], isError: false }, { cwd: "/project" });
+		expect(JSON.stringify(oldest)).not.toContain("pre-existed before this edit");
+		const newest = await result({ toolName: "edit", input: { path: "file-100.ts" }, content: [], isError: false }, { cwd: "/project" });
+		expect(JSON.stringify(newest)).toContain("pre-existed before this edit");
+		let retained = 0;
+		for (let index = 1; index < 100; index++) {
+			const note = await result({ toolName: "edit", input: { path: `file-${String(index).padStart(3, "0")}.ts` }, content: [], isError: false }, { cwd: "/project" });
+			if (JSON.stringify(note).includes("pre-existed before this edit")) retained++;
+		}
+		expect(retained).toBe(99);
+	});
+
 	it("drops a stashed note when a later edit of the same path is no longer erroring", async () => {
 		const pi = fakePi();
 		const uri = "file:///project/a.ts";

@@ -100,8 +100,11 @@ export function createExtension(options: ExtensionOptions = {}): ExtensionFactor
 					const details = messages.length > 0 ? `: ${messages.join("; ")}` : "";
 					return { block: true, reason: `Preflight found ${check.errorCount} current error(s) in ${absolutePath}${details}`.slice(0, 600) };
 				}
+				if (preflightNotes.size >= 100) {
+					const oldest = preflightNotes.keys().next();
+					if (!oldest.done) preflightNotes.delete(oldest.value);
+				}
 				preflightNotes.set(absolutePath, { errorCount: check.errorCount, messages });
-				while (preflightNotes.size > 100) preflightNotes.delete(preflightNotes.keys().next().value!);
 				return undefined;
 			} catch (error) {
 				try { logError("pi-lsp-onread: preflight failed", error); } catch { /* Never let logging block the tool call. */ }
