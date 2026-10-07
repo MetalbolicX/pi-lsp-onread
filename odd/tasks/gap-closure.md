@@ -51,21 +51,38 @@ the gaps and the t2.3".
 ## Tasks
 
 ### A — Advisory ledger retirement (structural + guard test)
-- [ ] Guarded eviction without non-null assertion; cap-eviction regression
-      test (oldest evicted, newest retained, cap held)
-- Route: parallel subagent A (gentle-ai-worker).
+- [x] Guarded evict-before-set (`size >= CAP` → `keys().next()` with
+      `!oldest.done` guard → delete → insert); no non-null assertion remains
+- [x] Cap-eviction regression test (oldest evicted, newest retained, cap
+      held, refresh safe) — passed pre-fix AND post-fix (honest
+      behavior-preservation evidence; no fabricated RED)
+- Route: parallel subagent A (gentle-ai-worker), commit `de87520`.
 
 ### B — Inlay tooltip resolve (test-first)
-- [ ] RED: resolve unsupported today (no session method / fixture handler)
-- [ ] GREEN: `RuntimeSession.resolveInlayHint` (gated, ok/unsupported/failed);
-      fixture resolve handler; tool resolves bounded hints and appends
-      tooltip text; conditional footer; README updated
-- [ ] Line-structure assertions for changed output lines
-- Route: parallel subagent B (gentle-ai-worker).
+- [x] RED observed verbatim: `TypeError: session.resolveInlayHint is not a
+      function`; label-only lines with `tooltips not resolved` footer
+      (3 focused failures)
+- [x] GREEN: `RuntimeSession.resolveInlayHint` (strict `resolveProvider ===
+      true` gate mirroring resolveCodeAction; ok/unsupported/failed;
+      malformed response ⇒ failed); fixture `FAKE_INLAY_HINT_RESOLVE`
+      capability + handler (default unchanged ⇒ existing behavior intact);
+      tool resolves with MAX_RESOLVE_ATTEMPTS 20, failed resolve keeps the
+      label, conditional footer (both variants line-structure asserted);
+      tooltip flatten (string / MarkupContent / MarkedString forms →
+      120-char single line); README updated
+- [x] Focused GREEN: 103 tests across the three inlay/session files
+- Route: parallel subagent B (gentle-ai-worker), commits `a9e0e1f`
+  (runtime) + `1547be4` (tooling).
 
 ### C — Integration (parent)
-- [ ] Full battery once (gentle-ai-verify), work-unit commits, closure,
-      slice review, record
+- [x] Parallel-contract spot checks: both hunks reviewed (eviction guard,
+      resolve gate, fixture opt-in, footer variants, README accuracy)
+- [x] Integration fix: TS2532 in worker B's test (optional `env` piercing)
+      — one-line object-assignment fix (typecheck excluded from parallel
+      contract by design; integration owns it)
+- [x] Full battery once (gentle-ai-verify): 453 tests / 47 files (+6),
+      lint 0, typecheck clean, build clean, `git diff --check` clean,
+      mutation-clean
 - Route: parent.
 
 ## Non-goals
@@ -89,6 +106,13 @@ the gaps and the t2.3".
   (resolveCodeAction precedent :285-290; inlayHints :399-402; tool footer
   :68, budgets :8-80). Branch created; both workers launched in parallel
   with disjoint surfaces.
+- 2026-10-05: BOTH workers returned green on their focused suites with the
+  sibling-blind contract held (neither ran full suite/typecheck/build).
+  A: structural fix + guard test (10/10 pre-and-post). B: RED→GREEN with
+  verbatim evidence (103 focused). Parent spot-checks passed; ONE
+  integration defect (TS2532 optional env) fixed by parent; full battery
+  453/47 all green. Work units: de87520 (A), a9e0e1f + 1547be4 (B), this
+  closure.
 
 ## Review record
 
