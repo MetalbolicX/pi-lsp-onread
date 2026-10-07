@@ -36,11 +36,11 @@ afterEach(async () => {
 	await Promise.all(projects.splice(0).map(removeProject));
 });
 
-async function setup(options: { trusted?: boolean; navigation?: boolean; typeHierarchy?: boolean } = {}) {
+async function setup(options: { trusted?: boolean; navigation?: boolean; typeHierarchy?: boolean; malformedHierarchy?: boolean } = {}) {
 	const project = await createProject(options.trusted ?? true);
 	projects.push(project.projectRoot);
 	const config = fakeConfig({ navigation: options.navigation });
-	if (options.typeHierarchy && config.lsp !== false) config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_TYPE_HIERARCHY: "1" };
+	if (options.typeHierarchy && config.lsp !== false) config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_TYPE_HIERARCHY: "1", FAKE_CALL_HIERARCHY: "1", ...(options.malformedHierarchy ? { FAKE_MALFORMED_HIERARCHY: "1" } : {}) };
 	const session = await RuntimeSession.create({
 		config,
 		projectRoot: project.projectRoot,
@@ -59,6 +59,7 @@ async function setup(options: { trusted?: boolean; navigation?: boolean; typeHie
 		typeDefinition: pi.tools.get("lsp_type_definition"),
 		references: pi.tools.get("lsp_references"),
 		typeHierarchy: pi.tools.get("lsp_type_hierarchy"),
+		callHierarchy: pi.tools.get("lsp_call_hierarchy"),
 	};
 }
 
@@ -179,6 +180,15 @@ describe("LSP navigation tools", () => {
 		const subs = await execute(typeHierarchy, filePath, 1, 1, projectRoot, undefined, "subtypes", item);
 		expect(supers.split("\n").some((line) => line.includes("alphaBase"))).toBe(true);
 		expect(subs.split("\n").some((line) => line.includes("alphaChild"))).toBe(true);
+	});
+
+	it("preserves call-line structure and marks malformed hierarchy sides honestly", async () => {
+		const { filePath, projectRoot, callHierarchy } = await setup({ typeHierarchy: true, malformedHierarchy: true });
+		const item = { name: "target", kind: 12, uri: pathToFileURL(filePath).href, selectionRange: { start: { line: 0, character: 1 }, end: { line: 0, character: 2 } } };
+		const lines = (await execute(callHierarchy, filePath, 1, 1, projectRoot, undefined, "incoming", item)).split("\n");
+		expect(lines[0]).toBe(`targetPeer → target — ${filePath}:1:1 → ${filePath}:1:2`);
+		expect(lines[1]).toBe(`(malformed source) → target — ? → ${filePath}:1:2`);
+		expect(lines[2]).toBe(`targetPeer → (malformed target) — ${filePath}:1:1 → ?`);
 	});
 
 	it("requires a prepared item for direction requests and reports unsupported type hierarchy", async () => {

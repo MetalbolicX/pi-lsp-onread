@@ -10,6 +10,7 @@ const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
 const callHierarchy = process.env.FAKE_CALL_HIERARCHY === "1";
+const malformedHierarchy = process.env.FAKE_MALFORMED_HIERARCHY === "1";
 const codeLens = process.env.FAKE_CODE_LENS === "1";
 const typeHierarchy = process.env.FAKE_TYPE_HIERARCHY === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
@@ -287,7 +288,10 @@ function handle(message) {
 		const point = { line: 0, character: 0 };
 		const peer = { ...item, name: `${item?.name ?? "function"}Peer`, selectionRange: { start: point, end: point } };
 		const result = message.method.endsWith("incomingCalls")
-			? [{ from: peer, to: item, fromRanges: [item?.selectionRange ?? { start: point, end: point }] }]
+			? [{ from: peer, to: item, fromRanges: [item?.selectionRange ?? { start: point, end: point }] }, ...(malformedHierarchy ? [
+				{ from: "not-an-object", to: item, fromRanges: [] },
+				{ from: peer, to: 42, fromRanges: [] },
+			] : [])]
 			: [{ from: item, to: peer, fromRanges: [item?.selectionRange ?? { start: point, end: point }] }];
 		send({ jsonrpc: "2.0", id: message.id, result });
 	} else if (message.method === "textDocument/prepareRename" && (rename || renameBoolean)) {

@@ -289,10 +289,12 @@ async function runCallHierarchy(
 					lines.push(`${index + 1}. ${stringValue(raw.name, "(unnamed)")} (${symbolKindName(raw.kind)})${typeof raw.detail === "string" ? ` — ${raw.detail.slice(0, 120)}` : ""} — ${itemPosition(raw)}`);
 				} else {
 					const call = raw as Record<string, unknown>;
-					const from = isRecord(call.from) ? call.from : {};
-					const to = isRecord(call.to) ? call.to : {};
+					const fromIsRecord = isRecord(call.from);
+					const toIsRecord = isRecord(call.to);
+					const from = (fromIsRecord ? call.from : {}) as Record<string, unknown>;
+					const to = (toIsRecord ? call.to : {}) as Record<string, unknown>;
 					const ranges = Array.isArray(call.fromRanges) ? call.fromRanges : [];
-					lines.push(`${stringValue(from.name, "(unnamed)")} → ${stringValue(to.name, "(unnamed)")} — ${itemPosition(from, ranges[0])} → ${itemPosition(to)}`);
+					lines.push(`${fromIsRecord ? stringValue(from.name, "(unnamed)") : "(malformed source)"} → ${toIsRecord ? stringValue(to.name, "(unnamed)") : "(malformed target)"} — ${fromIsRecord ? itemPosition(from, ranges[0]) : "?"} → ${toIsRecord ? itemPosition(to) : "?"}`);
 				}
 			}
 			if (values.length > 100) lines.push(`… ${values.length - 100} more entries omitted (cap 100)`);
