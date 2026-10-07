@@ -116,4 +116,15 @@ the gaps and the t2.3".
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-1b6459b71c923e08`, medium tier
+  (`executable_change` on `src/extension.ts`), review-reliability lens,
+  11 paths / 299 lines, correction budget 150, base
+  `3ddfae4f8fd0290389556661c7ff08243d75d4bd` (committedOnly). One stale
+  consent binding (expired, no lineage) recovered with a fresh
+  idempotency key. Reviewer forecast (1 host-relay run) acknowledged;
+  approved on the last admitted event; acknowledgement burned (consumed
+  revision `sha256:7297fb0d…`). One NON-BLOCKING informational advisory:
+  R3-001 reliability WARNING at `src/pi/lsp-inlay-hints-tool.ts:74`
+  (sequential per-hint resolve awaits — latency fan-out note; ledger item).
+  **The previous ledger item `extension.ts:102-104` is RETIRED by task A
+  of this very slice.** Delivery: ordinary repository policy.
