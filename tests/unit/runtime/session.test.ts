@@ -879,4 +879,50 @@ describe("RuntimeSession", () => {
 			} finally { await session.dispose(); }
 		});
 	});
+
+	it("requests prepared type hierarchy items and directional relationships", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const item = { name: "Alpha", kind: 5 };
+		let args: unknown[] = [];
+		const client = {
+			capabilities: () => ({ typeHierarchyProvider: true }),
+			request: async (...received: unknown[]) => { args = received; return { ok: true, value: [item] }; },
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.prepareTypeHierarchy("fake", "file:///types.ts", 1, 2, 1234, client)).toEqual({ outcome: "ok", items: [item] });
+			expect(args).toEqual(["textDocument/prepareTypeHierarchy", { textDocument: { uri: "file:///types.ts" }, position: { line: 1, character: 2 } }, 1234]);
+			expect(await session.typeHierarchyDirections("fake", "supertypes", item, 1234, client)).toEqual({ outcome: "ok", items: [item] });
+			expect(args).toEqual(["typeHierarchy/supertypes", { item }, 1234]);
+			expect(await session.typeHierarchyDirections("fake", "subtypes", item, 1234, client)).toEqual({ outcome: "ok", items: [item] });
+			expect(args).toEqual(["typeHierarchy/subtypes", { item }, 1234]);
+		} finally { await session.dispose(); }
+	});
+
+	it("requests selection ranges, document highlights, and code lenses with bounded results", async () => {
+		const { projectRoot, trustStorePath } = await setup();
+		const session = await RuntimeSession.create({ config: fakeConfig(), projectRoot, trustStorePath });
+		const values = [
+			{ parent: { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } } } },
+			{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, kind: 1 },
+			{ range: { start: { line: 2, character: 0 }, end: { line: 2, character: 1 } }, command: { title: "lens" } },
+		];
+		const requests: unknown[][] = [];
+		const client = {
+			capabilities: () => ({ selectionRangeProvider: true, documentHighlightProvider: true, codeLensProvider: true }),
+			request: async (...args: unknown[]) => { requests.push(args); return { ok: true, value: [values[requests.length - 1]] }; },
+			documents: { version: () => undefined },
+		} as unknown as LspClient;
+		try {
+			expect(await session.selectionRange("fake", "file:///editor.ts", 2, 4, 1234, client)).toEqual({ outcome: "ok", ranges: [{ start: { line: 0, character: 0 }, end: { line: 0, character: 3 } }] });
+			expect(await session.documentHighlight("fake", "file:///editor.ts", 2, 4, 1234, client)).toEqual({ outcome: "ok", highlights: [values[1]] });
+			expect(await session.codeLens("fake", "file:///editor.ts", 1, 3, 1234, client)).toEqual({ outcome: "ok", lenses: [values[2]] });
+			expect(requests).toEqual([
+				["textDocument/selectionRange", { textDocument: { uri: "file:///editor.ts" }, positions: [{ line: 2, character: 4 }] }, 1234],
+				["textDocument/documentHighlight", { textDocument: { uri: "file:///editor.ts" }, position: { line: 2, character: 4 } }, 1234],
+				["textDocument/codeLens", { textDocument: { uri: "file:///editor.ts" }, range: { start: { line: 1, character: 0 }, end: { line: 3, character: 0 } } }, 1234],
+			]);
+		} finally { await session.dispose(); }
+	});
 });

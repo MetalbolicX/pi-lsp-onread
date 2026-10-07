@@ -10,6 +10,8 @@ const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
 const workspaceSymbols = process.env.FAKE_WORKSPACE_SYMBOLS === "1";
 const navigation = process.env.FAKE_NAVIGATION === "1";
 const callHierarchy = process.env.FAKE_CALL_HIERARCHY === "1";
+const codeLens = process.env.FAKE_CODE_LENS === "1";
+const typeHierarchy = process.env.FAKE_TYPE_HIERARCHY === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
 const inlayHintResolve = process.env.FAKE_INLAY_HINT_RESOLVE === "1";
 const rename = process.env.FAKE_RENAME === "1";
@@ -113,7 +115,11 @@ function handle(message) {
 		if (documentSymbols) capabilities.documentSymbolProvider = true;
 		if (workspaceSymbols) capabilities.workspaceSymbolProvider = true;
 		if (callHierarchy) capabilities.callHierarchyProvider = true;
+		if (codeLens) capabilities.codeLensProvider = { resolveProvider: false };
+		if (typeHierarchy) capabilities.typeHierarchyProvider = true;
 		if (navigation) {
+			capabilities.selectionRangeProvider = true;
+			capabilities.documentHighlightProvider = true;
 			capabilities.definitionProvider = true;
 			capabilities.referencesProvider = true;
 			capabilities.implementationProvider = true;
@@ -209,6 +215,60 @@ function handle(message) {
 			range: { start: { line: index, character: 0 }, end: { line: index, character: content.length } },
 		}));
 		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/selectionRange" && navigation) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const text = documents.get(uri)?.text ?? "";
+		const position = message.params.positions?.[0] ?? { line: 0, character: 0 };
+		const lines = text.split("\n");
+		const line = Math.max(0, Math.min(position.line ?? 0, lines.length - 1));
+		const character = Math.max(0, Math.min(position.character ?? 0, lines[line]?.length ?? 0));
+		const range = (startLine, startCharacter, endLine, endCharacter) => ({ start: { line: startLine, character: startCharacter }, end: { line: endLine, character: endCharacter } });
+		const inner = range(line, character, line, Math.min(character + 1, lines[line]?.length ?? character));
+		const middle = range(line, 0, line, lines[line]?.length ?? 0);
+		const outer = range(0, 0, Math.max(0, lines.length - 1), lines.at(-1)?.length ?? 0);
+		send({ jsonrpc: "2.0", id: message.id, result: [{ range: inner, parent: { range: middle, parent: { range: outer } } }] });
+	} else if (message.method === "textDocument/documentHighlight" && navigation) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const lines = (documents.get(uri)?.text ?? "").split("\n");
+		const result = [1, 2, 3].flatMap((kind, index) => {
+			const line = index % Math.max(lines.length, 1);
+			const length = lines[line]?.length ?? 0;
+			return [{ kind, range: { start: { line, character: 0 }, end: { line, character: Math.min(length, 5) } } }];
+		});
+		send({ jsonrpc: "2.0", id: message.id, result });
+	} else if (message.method === "textDocument/codeLens" && codeLens) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const text = documents.get(uri)?.text ?? "";
+		const lines = text.split("\n");
+		const lenses = [
+			{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: Math.min(5, lines[0]?.length ?? 0) } }, command: { title: "3 references", command: "fake.references" } },
+			{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: Math.min(3, lines[1]?.length ?? 0) } } },
+			{ range: { start: { line: 2, character: 0 }, end: { line: 2, character: Math.min(5, lines[2]?.length ?? 0) } }, command: { title: "outside range", command: "fake.outside" } },
+		];
+		send({ jsonrpc: "2.0", id: message.id, result: lenses });
+	} else if (message.method === "textDocument/prepareTypeHierarchy" && typeHierarchy) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { uri } = message.params.textDocument;
+		const text = documents.get(uri)?.text ?? "";
+		const items = text.split("\n").flatMap((content, line) => {
+			const match = content.match(/(?:class|function) (\w+)/);
+			if (!match) return [];
+			const [matchedDeclaration, name] = match;
+			const start = content.indexOf(name);
+			const range = { start: { line, character: start }, end: { line, character: start + name.length } };
+			return [{ name, kind: matchedDeclaration.startsWith("class") ? 5 : 12, detail: "fixture type detail", uri, range, selectionRange: range }];
+		}).slice(0, 2);
+		send({ jsonrpc: "2.0", id: message.id, result: items });
+	} else if ((message.method === "typeHierarchy/supertypes" || message.method === "typeHierarchy/subtypes") && typeHierarchy) {
+		if (message.method === process.env.FAKE_HANG_METHOD) return;
+		const { item } = message.params;
+		const suffix = message.method.endsWith("supertypes") ? "Base" : "Child";
+		const { name, kind } = item ?? {};
+		const related = { ...item, name: `${name ?? "Type"}${suffix}`, kind: kind ?? 5 };
+		send({ jsonrpc: "2.0", id: message.id, result: [related] });
 	} else if (message.method === "textDocument/prepareCallHierarchy" && callHierarchy) {
 		if (message.method === process.env.FAKE_HANG_METHOD) return;
 		const { uri } = message.params.textDocument;

@@ -11,7 +11,7 @@ type Tool = {
 	description?: string;
 	parameters: unknown;
 	annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean };
-	execute: (id: string, params: { path: string; line: number; character: number; includeDeclaration?: boolean }, signal?: AbortSignal, update?: unknown, ctx?: { cwd: string }) => Promise<{ content: Array<{ type: string; text?: string }> }>;
+	execute: (id: string, params: { path: string; line: number; character: number; includeDeclaration?: boolean; mode?: string; item?: unknown }, signal?: AbortSignal, update?: unknown, ctx?: { cwd: string }) => Promise<{ content: Array<{ type: string; text?: string }> }>;
 };
 
 function fakePiApi() {
@@ -36,11 +36,13 @@ afterEach(async () => {
 	await Promise.all(projects.splice(0).map(removeProject));
 });
 
-async function setup(options: { trusted?: boolean; navigation?: boolean } = {}) {
+async function setup(options: { trusted?: boolean; navigation?: boolean; typeHierarchy?: boolean } = {}) {
 	const project = await createProject(options.trusted ?? true);
 	projects.push(project.projectRoot);
+	const config = fakeConfig({ navigation: options.navigation });
+	if (options.typeHierarchy && config.lsp !== false) config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_TYPE_HIERARCHY: "1" };
 	const session = await RuntimeSession.create({
-		config: fakeConfig({ navigation: options.navigation }),
+		config,
 		projectRoot: project.projectRoot,
 		trustStorePath: project.trustStorePath,
 	});
@@ -56,12 +58,13 @@ async function setup(options: { trusted?: boolean; navigation?: boolean } = {}) 
 		implementation: pi.tools.get("lsp_implementation"),
 		typeDefinition: pi.tools.get("lsp_type_definition"),
 		references: pi.tools.get("lsp_references"),
+		typeHierarchy: pi.tools.get("lsp_type_hierarchy"),
 	};
 }
 
-async function execute(tool: Tool | undefined, path: string, line: number, character: number, cwd: string, includeDeclaration?: boolean) {
+async function execute(tool: Tool | undefined, path: string, line: number, character: number, cwd: string, includeDeclaration?: boolean, mode?: string, item?: unknown) {
 	if (!tool) throw new Error("navigation tool was not registered");
-	const result = await tool.execute("call-1", { path, line, character, ...(includeDeclaration === undefined ? {} : { includeDeclaration }) }, undefined, undefined, { cwd });
+	const result = await tool.execute("call-1", { path, line, character, ...(includeDeclaration === undefined ? {} : { includeDeclaration }), ...(mode === undefined ? {} : { mode }), ...(item === undefined ? {} : { item }) }, undefined, undefined, { cwd });
 	return result.content.map((item) => item.text ?? "").join("\n");
 }
 
@@ -162,5 +165,25 @@ describe("LSP navigation tools", () => {
 		await writeFile(filePath, Array.from({ length: 500 }, (_, index) => `line ${index}`).join("\n"));
 		const output = await execute(references, filePath, 1, 1, projectRoot);
 		expect(output.length).toBeLessThanOrEqual(8000);
+	});
+
+	it("prepares type hierarchy and lists supertypes and subtypes", async () => {
+		const { filePath, projectRoot, typeHierarchy } = await setup({ typeHierarchy: true });
+		await writeFile(filePath, "function alpha() {}\nfunction beta() {}\n");
+		expect(typeHierarchy).toBeDefined();
+		const prepared = await execute(typeHierarchy, filePath, 1, 1, projectRoot);
+		expect(prepared.split("\n").some((line) => line.startsWith("1. alpha (Function)"))).toBe(true);
+		expect(prepared).toContain("pass an item back verbatim as item");
+		const item = { name: "alpha", kind: 12, uri: pathToFileURL(filePath).href, selectionRange: { start: { line: 0, character: 9 }, end: { line: 0, character: 14 } } };
+		const supers = await execute(typeHierarchy, filePath, 1, 1, projectRoot, undefined, "supertypes", item);
+		const subs = await execute(typeHierarchy, filePath, 1, 1, projectRoot, undefined, "subtypes", item);
+		expect(supers.split("\n").some((line) => line.includes("alphaBase"))).toBe(true);
+		expect(subs.split("\n").some((line) => line.includes("alphaChild"))).toBe(true);
+	});
+
+	it("requires a prepared item for direction requests and reports unsupported type hierarchy", async () => {
+		const { filePath, projectRoot, typeHierarchy } = await setup();
+		expect(await execute(typeHierarchy, filePath, 1, 1, projectRoot, undefined, "supertypes")).toContain("An object item is required");
+		expect(await execute(typeHierarchy, filePath, 1, 1, projectRoot)).toContain("does not support type hierarchy");
 	});
 });

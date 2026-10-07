@@ -34,6 +34,7 @@ type SessionForRoot = (projectRoot: string) => Promise<RuntimeSession>;
 type NavigationKind = "definition" | "references" | "implementation" | "typeDefinition";
 type NavigationResult = { serverId: string; locations: unknown[] };
 type HierarchyResult = { serverId: string; values: unknown[] };
+type HierarchyFlavor = "call" | "type";
 type NavigationRequest = {
 	serverId: string;
 	uri: string;
@@ -103,6 +104,27 @@ export function registerLspCallHierarchyTool(pi: ExtensionAPI, getSession: Sessi
 		annotations,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionToolContext) {
 			return runCallHierarchy(params as { path: string; line: number; character: number; mode?: string; item?: unknown }, ctx, getSession);
+		},
+	});
+}
+
+/** Register an on-demand, read-only type hierarchy tool. */
+export function registerLspTypeHierarchyTool(pi: ExtensionAPI, getSession: SessionForRoot): void {
+	pi.registerTool({
+		name: "lsp_type_hierarchy",
+		label: "LSP type hierarchy",
+		description: "Prepare type hierarchy items or list supertypes/subtypes; read-only, bounded, positions are 1-based UTF-16 code units.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string" }, line: { type: "integer", minimum: 1 }, character: { type: "integer", minimum: 1 },
+				mode: { type: "string", enum: ["prepare", "supertypes", "subtypes"] }, item: { type: "object" },
+			},
+			required: ["path", "line", "character"], additionalProperties: false,
+		} as never,
+		annotations,
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionToolContext) {
+			return runCallHierarchy(params as { path: string; line: number; character: number; mode?: string; item?: unknown }, ctx, getSession, "type");
 		},
 	});
 }
@@ -208,10 +230,13 @@ async function runCallHierarchy(
 	params: { path: string; line: number; character: number; mode?: string; item?: unknown },
 	ctx: ExtensionToolContext,
 	getSession: SessionForRoot,
+	flavor: HierarchyFlavor = "call",
 ) {
 	try {
-		if (params.mode !== undefined && !["prepare", "incoming", "outgoing"].includes(params.mode)) return text("mode must be prepare, incoming, or outgoing.");
-		const mode = (params.mode ?? "prepare") as "prepare" | "incoming" | "outgoing";
+		const allowedModes = flavor === "call" ? ["prepare", "incoming", "outgoing"] : ["prepare", "supertypes", "subtypes"];
+		const noun = flavor === "call" ? "call hierarchy" : "type hierarchy";
+		if (params.mode !== undefined && !allowedModes.includes(params.mode)) return text(`mode must be ${allowedModes.join(", ")}.`);
+		const mode = (params.mode ?? "prepare") as "prepare" | "incoming" | "outgoing" | "supertypes" | "subtypes";
 		if (mode !== "prepare" && (!params.item || typeof params.item !== "object" || Array.isArray(params.item))) {
 			return text(`An object item is required; prepare first at a position, then pass an item with mode ${mode}.`);
 		}
@@ -234,26 +259,33 @@ async function runCallHierarchy(
 			const client = [...session.pool.entries()].find(([key]) => key.startsWith(`${serverId}::`))?.[1];
 			const timeoutMs = Math.min(server?.requestTimeoutMs ?? DEFAULT_PULL_TIMEOUT_MS, DEFAULT_PULL_TIMEOUT_MS);
 			if (mode === "prepare") {
-				const result = await session.prepareCallHierarchy(serverId, uri, line - 1, character - 1, timeoutMs, client);
-				if (result.outcome === "failed") failures.push(`failed to retrieve call hierarchy ${mode} from ${serverId}`);
-				else if (result.outcome === "unsupported") unsupported.push(`${serverId} does not support call hierarchy`);
+				const result = flavor === "call"
+					? await session.prepareCallHierarchy(serverId, uri, line - 1, character - 1, timeoutMs, client)
+					: await session.prepareTypeHierarchy(serverId, uri, line - 1, character - 1, timeoutMs, client);
+				if (result.outcome === "failed") failures.push(`failed to retrieve ${noun} ${mode} from ${serverId}`);
+				else if (result.outcome === "unsupported") unsupported.push(`${serverId} does not support ${noun}`);
 				else results.push({ serverId, values: result.items });
-			} else {
-				const result = await session.callHierarchyCalls(serverId, mode, params.item, timeoutMs, client);
-				if (result.outcome === "failed") failures.push(`failed to retrieve call hierarchy ${mode} from ${serverId}`);
-				else if (result.outcome === "unsupported") unsupported.push(`${serverId} does not support call hierarchy`);
+			} else if (flavor === "call") {
+				const result = await session.callHierarchyCalls(serverId, mode as "incoming" | "outgoing", params.item, timeoutMs, client);
+				if (result.outcome === "failed") failures.push(`failed to retrieve ${noun} ${mode} from ${serverId}`);
+				else if (result.outcome === "unsupported") unsupported.push(`${serverId} does not support ${noun}`);
 				else results.push({ serverId, values: result.calls });
+			} else {
+				const result = await session.typeHierarchyDirections(serverId, mode as "supertypes" | "subtypes", params.item, timeoutMs, client);
+				if (result.outcome === "failed") failures.push(`failed to retrieve ${noun} ${mode} from ${serverId}`);
+				else if (result.outcome === "unsupported") unsupported.push(`${serverId} does not support ${noun}`);
+				else results.push({ serverId, values: result.items });
 			}
 		}
 		const lines = [...failures, ...unsupported];
-		if (results.length === 0 && unsupported.length === activation.matchedServers.length) lines.push("No matched language server supports call hierarchy for this file.");
+		if (results.length === 0 && unsupported.length === activation.matchedServers.length) lines.push(`No matched language server supports ${noun} for this file.`);
 		const multiple = results.length > 1;
 		for (const { serverId, values } of results) {
 			if (multiple) lines.push(`${serverId}:`);
-			if (values.length === 0) lines.push(mode === "prepare" ? "No call hierarchy items at this position." : `No ${mode} calls reported.`);
+			if (values.length === 0) lines.push(mode === "prepare" ? `No ${noun} items at this position.` : `No ${mode} ${flavor === "call" ? "calls" : "types"} reported.`);
 			for (const [index, raw] of values.slice(0, 100).entries()) {
 				if (!isRecord(raw)) { lines.push("… unreadable hierarchy entry omitted"); continue; }
-				if (mode === "prepare") {
+				if (mode === "prepare" || flavor === "type") {
 					lines.push(`${index + 1}. ${stringValue(raw.name, "(unnamed)")} (${symbolKindName(raw.kind)})${typeof raw.detail === "string" ? ` — ${raw.detail.slice(0, 120)}` : ""} — ${itemPosition(raw)}`);
 				} else {
 					const call = raw as Record<string, unknown>;
@@ -265,18 +297,18 @@ async function runCallHierarchy(
 			}
 			if (values.length > 100) lines.push(`… ${values.length - 100} more entries omitted (cap 100)`);
 		}
-		if (mode === "prepare") lines.push("pass an item back verbatim as item with mode incoming or outgoing");
+		if (mode === "prepare") lines.push(`pass an item back verbatim as item with mode ${flavor === "call" ? "incoming or outgoing" : "supertypes or subtypes"}`);
 		const coverage = `coverage: ${activation.matchedServers.length} server(s) queried for this position; results reflect each server's current view; positions are 1-based UTF-16 code units`;
 		lines.push(coverage);
 		const output = lines.join("\n");
 		if (output.length <= MAX_OUTPUT_CHARS) return text(output);
-		const prepareFooter = "pass an item back verbatim as item with mode incoming or outgoing";
+		const prepareFooter = `pass an item back verbatim as item with mode ${flavor === "call" ? "incoming or outgoing" : "supertypes or subtypes"}`;
 		const requiredFooter = mode === "prepare" ? `${prepareFooter}\n${coverage}` : coverage;
 		const truncation = `… output truncated to ${MAX_OUTPUT_CHARS} characters\n${requiredFooter}`;
 		return text(`${output.slice(0, Math.max(0, MAX_OUTPUT_CHARS - truncation.length - 1))}\n${truncation}`);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		return text(`Unable to retrieve call hierarchy: ${message}`);
+		return text(`Unable to retrieve ${flavor === "call" ? "call hierarchy" : "type hierarchy"}: ${message}`);
 	}
 }
 

@@ -458,6 +458,98 @@ export class RuntimeSession {
 		}
 	}
 
+	async selectionRange(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; ranges: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.selectionRangeProvider) return { outcome: "unsupported", ranges: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", ranges: [] };
+			const response = await client.request<unknown>("textDocument/selectionRange", { textDocument: { uri }, positions: [{ line, character }] }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", ranges: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", ranges: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", ranges: [] };
+			const flattened: unknown[] = [];
+			for (const root of response.value) {
+				let node: unknown = root;
+				for (let depth = 0; node && typeof node === "object" && depth < 20; depth += 1) {
+					const current = node as Record<string, unknown>;
+					const { range } = current;
+					if (range && typeof range === "object" && !Array.isArray(range)) {
+						const { start: rawStart, end: rawEnd } = range as Record<string, unknown>;
+						const start = rawStart && typeof rawStart === "object" && !Array.isArray(rawStart) ? rawStart as Record<string, unknown> : undefined;
+						const end = rawEnd && typeof rawEnd === "object" && !Array.isArray(rawEnd) ? rawEnd as Record<string, unknown> : undefined;
+						const valid = (point: Record<string, unknown> | undefined) => point && Number.isInteger(point.line) && Number(point.line) >= 0 && Number.isInteger(point.character) && Number(point.character) >= 0;
+						if (valid(start) && valid(end)) flattened.push(range);
+					}
+					node = current.parent;
+				}
+			}
+			return { outcome: "ok", ranges: flattened.slice(0, 1000) };
+		} catch { return { outcome: "failed", ranges: [] }; }
+	}
+
+	async documentHighlight(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; highlights: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.documentHighlightProvider) return { outcome: "unsupported", highlights: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", highlights: [] };
+			const response = await client.request<unknown>("textDocument/documentHighlight", { textDocument: { uri }, position: { line, character } }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", highlights: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", highlights: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", highlights: [] };
+			return { outcome: "ok", highlights: response.value.slice(0, 100) };
+		} catch { return { outcome: "failed", highlights: [] }; }
+	}
+
+	async codeLens(serverId: string, uri: string, startLine0: number, endLine0: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; lenses: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.codeLensProvider) return { outcome: "unsupported", lenses: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", lenses: [] };
+			const response = await client.request<unknown>("textDocument/codeLens", { textDocument: { uri }, range: { start: { line: startLine0, character: 0 }, end: { line: endLine0, character: 0 } } }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", lenses: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", lenses: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", lenses: [] };
+			const lenses = response.value.filter((lens) => {
+				if (!lens || typeof lens !== "object" || Array.isArray(lens)) return false;
+				const { range } = lens as Record<string, unknown>;
+				if (!range || typeof range !== "object" || Array.isArray(range)) return false;
+				const { start, end } = range as Record<string, unknown>;
+				if (!start || typeof start !== "object" || Array.isArray(start) || !end || typeof end !== "object" || Array.isArray(end)) return false;
+				const { line: startLine } = start as Record<string, unknown>;
+				const { line: endLine } = end as Record<string, unknown>;
+				return typeof startLine === "number" && typeof endLine === "number"
+					&& startLine < endLine0 && (startLine >= startLine0 || endLine > startLine0);
+			}).slice(0, 100);
+			return { outcome: "ok", lenses };
+		} catch { return { outcome: "failed", lenses: [] }; }
+	}
+
+	async prepareTypeHierarchy(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; items: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.typeHierarchyProvider) return { outcome: "unsupported", items: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", items: [] };
+			const response = await client.request<unknown>("textDocument/prepareTypeHierarchy", { textDocument: { uri }, position: { line, character } }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", items: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", items: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", items: [] };
+			return { outcome: "ok", items: response.value.slice(0, 1000) };
+		} catch { return { outcome: "failed", items: [] }; }
+	}
+
+	async typeHierarchyDirections(serverId: string, direction: "supertypes" | "subtypes", item: unknown, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; items: unknown[] }> {
+		try {
+			const client = this.matchedClient(serverId, suppliedClient);
+			if (!client || !client.capabilities()?.typeHierarchyProvider) return { outcome: "unsupported", items: [] };
+			if (timeoutMs <= 0) return { outcome: "failed", items: [] };
+			const response = await client.request<unknown>(`typeHierarchy/${direction}`, { item }, timeoutMs);
+			if (!response.ok) return { outcome: "failed", items: [] };
+			if (response.value === null || response.value === undefined) return { outcome: "ok", items: [] };
+			if (!Array.isArray(response.value)) return { outcome: "failed", items: [] };
+			return { outcome: "ok", items: response.value.slice(0, 1000) };
+		} catch { return { outcome: "failed", items: [] }; }
+	}
+
 	async prepareCallHierarchy(serverId: string, uri: string, line: number, character: number, timeoutMs = 10_000, suppliedClient?: LspClient): Promise<{ outcome: "unsupported" | "failed" | "ok"; items: unknown[] }> {
 		try {
 			const client = this.matchedClient(serverId, suppliedClient);
