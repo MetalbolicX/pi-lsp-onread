@@ -12,9 +12,10 @@ function fakePiApi() {
 const sessions: RuntimeSession[] = [];
 const projects: string[] = [];
 afterEach(async () => { await Promise.all(sessions.splice(0).map((session) => session.dispose())); await Promise.all(projects.splice(0).map(removeProject)); });
-async function setup(options: { trusted?: boolean; servers?: number } = {}) {
+async function setup(options: { trusted?: boolean; servers?: number; resolveInlayHints?: boolean } = {}) {
 	const project = await createProject(options.trusted ?? true); projects.push(project.projectRoot);
 	const config = fakeConfig();
+	if (options.resolveInlayHints && config.lsp !== false) config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_INLAY_HINT_RESOLVE: "1" };
 	if (options.servers && options.servers > 1 && config.lsp !== false) config.lsp.other = { ...config.lsp.fake! };
 	const session = await RuntimeSession.create({ config, projectRoot: project.projectRoot, trustStorePath: project.trustStorePath }); sessions.push(session);
 	const pi = fakePiApi(); createExtension({ createSession: async () => session })(pi as never);
@@ -32,6 +33,30 @@ describe("lsp_inlay_hints", () => {
 		expect(tool?.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
 		expect(await execute(tool, filePath, projectRoot)).toBe("L1:C2  [type] string\ncoverage: 1 server(s) queried for this range; label text only, tooltips not resolved; results reflect each server's current view and may lag recent edits; lines are 1-based UTF-16 code units; other ranges and files not checked");
 		expect(session.inlayHints).toHaveBeenCalledWith("fake", expect.any(String), 0, 200, 5000, expect.anything());
+	});
+	it("resolves fixture tooltips and reports resolution in separate output lines", async () => {
+		const { filePath, projectRoot, tool } = await setup({ resolveInlayHints: true });
+		await writeFile(filePath, "first line\nsecond line\n");
+		const lines = (await execute(tool, filePath, projectRoot)).split("\n");
+		expect(lines.slice(0, 3)).toEqual([
+			"L1:C6  [type] string — fixture type tooltip",
+			"L1:C9  [param] argument — fixture parameter tooltip",
+			"L2:C1   -> result — fixture result tooltip",
+		]);
+		expect(lines.at(-1)).toContain("tooltips resolved when supported");
+		expect(lines.at(-1)).not.toContain("tooltips not resolved");
+	});
+	it("continues after resolve failures and caps attempts at twenty per range", async () => {
+		const { filePath, projectRoot, session, tool } = await setup({ resolveInlayHints: true });
+		const hints = Array.from({ length: 21 }, (_, index) => ({ position: { line: 0, character: index }, label: `hint-${index}` }));
+		vi.spyOn(session, "inlayHints").mockResolvedValue({ outcome: "ok", hints });
+		const resolve = vi.spyOn(session, "resolveInlayHint").mockResolvedValue({ outcome: "failed", hint: null });
+		const lines = (await execute(tool, filePath, projectRoot)).split("\n");
+		expect(resolve).toHaveBeenCalledTimes(20);
+		expect(lines.slice(0, 21)).toHaveLength(21);
+		expect(lines[0]).toBe("L1:C1  hint-0");
+		expect(lines[20]).toBe("L1:C21  hint-20");
+		expect(lines.at(-1)).toContain("tooltips resolved when supported");
 	});
 	it("uses the fixture server inlay hints", async () => {
 		const { filePath, projectRoot, tool } = await setup();

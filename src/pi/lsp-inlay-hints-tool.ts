@@ -7,6 +7,7 @@ import type { RuntimeSession } from "../runtime/session.js";
 
 const MAX_OUTPUT_CHARS = 8_000;
 const DEFAULT_PULL_TIMEOUT_MS = 5_000;
+const MAX_RESOLVE_ATTEMPTS = 20;
 const annotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const params = {
 	type: "object",
@@ -23,7 +24,7 @@ export function registerLspInlayHintsTool(pi: ExtensionAPI, getSession: SessionF
 	pi.registerTool({
 		name: "lsp_inlay_hints",
 		label: "LSP inlay hints",
-		description: "Preview inlay hints in a bounded line range; only label text is returned and lines are 1-based.",
+		description: "Preview inlay hints in a bounded line range, including resolved tooltips when supported; lines are 1-based.",
 		parameters: params,
 		annotations,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionToolContext) {
@@ -53,19 +54,35 @@ async function runInlayHints(params: { path: string; startLine?: number; endLine
 		const unsupported: string[] = [];
 		const results: InlayResult[] = [];
 		const config = session.configResult.ok ? session.configResult.config : undefined;
+		let resolveAttempts = 0;
+		let resolutionSupported = false;
 		for (const serverId of result.matchedServers) {
 			const server = config && config.lsp !== false ? config.lsp[serverId] : undefined;
 			const client = [...session.pool.entries()].find(([key]) => key.startsWith(`${serverId}::`))?.[1];
 			const timeoutMs = Math.min(server?.requestTimeoutMs ?? DEFAULT_PULL_TIMEOUT_MS, DEFAULT_PULL_TIMEOUT_MS);
+			const provider = client?.capabilities()?.inlayHintProvider;
+			const canResolve = !!provider && typeof provider === "object" && !Array.isArray(provider)
+				&& (provider as { resolveProvider?: unknown }).resolveProvider === true;
+			resolutionSupported ||= canResolve;
 			const outcome = await session.inlayHints(serverId, uri, startLine - 1, endLine, timeoutMs, client);
 			if (outcome.outcome === "failed") failures.push(`failed to retrieve inlay hints from ${serverId}`);
 			else if (outcome.outcome === "unsupported") unsupported.push(`${serverId} does not support inlay hints`);
-			else results.push({ serverId, hints: outcome.hints });
+			else {
+				const hints: unknown[] = [];
+				for (const hint of outcome.hints) {
+					if (!canResolve || resolveAttempts >= MAX_RESOLVE_ATTEMPTS) { hints.push(hint); continue; }
+					resolveAttempts += 1;
+					const resolved = await session.resolveInlayHint(serverId, hint, timeoutMs, client);
+					hints.push(resolved.outcome === "ok" ? resolved.hint : hint);
+				}
+				results.push({ serverId, hints });
+			}
 		}
 
 		const fixedLines = [...failures, ...unsupported];
 		if (results.length === 0) return text(fixedLines.join("\n"));
-		const footer = `coverage: ${result.matchedServers.length} server(s) queried for this range; label text only, tooltips not resolved; results reflect each server's current view and may lag recent edits; lines are 1-based UTF-16 code units; other ranges and files not checked`;
+		const tooltipStatus = resolutionSupported ? "tooltips resolved when supported" : "label text only, tooltips not resolved";
+		const footer = `coverage: ${result.matchedServers.length} server(s) queried for this range; ${tooltipStatus}; results reflect each server's current view and may lag recent edits; lines are 1-based UTF-16 code units; other ranges and files not checked`;
 		const everySectionEmpty = results.every(({ hints }) => formatInlayHints(hints, MAX_OUTPUT_CHARS) === "");
 		if (everySectionEmpty && failures.length === 0) return text([...fixedLines, "No inlay hints in the requested range.", footer].filter(Boolean).join("\n"));
 

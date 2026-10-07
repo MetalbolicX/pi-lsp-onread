@@ -13,6 +13,20 @@ describe("formatInlayHints", () => {
 		expect(formatInlayHints([{ position: { line: 0, character: 0 }, label: [{ text: "one" }, { value: "two" }, null] }], 100))
 			.toBe("L1:C1  onetwo");
 	});
+	it("flattens and bounds string, markup, and marked-string tooltips on hint lines", () => {
+		expect(formatInlayHints([
+			{ position: { line: 0, character: 0 }, label: "a", tooltip: `plain${String.fromCharCode(10)}text` },
+			{ position: { line: 1, character: 0 }, label: "b", tooltip: { kind: "markdown", value: `**bold**${String.fromCharCode(10)}more` } },
+			{ position: { line: 2, character: 0 }, label: "c", tooltip: [{ language: "ts", value: "const x = 1;" }, "tail"] },
+			{ position: { line: 3, character: 0 }, label: "d", tooltip: "x".repeat(130) },
+		], 1000)).toBe([
+			"L1:C1  a — plain text",
+			"L2:C1  b — **bold** more",
+			"L3:C1  c — const x = 1; tail",
+			`L4:C1  d — ${"x".repeat(117)}...`,
+		].join(String.fromCharCode(10)));
+	});
+
 	it("sorts by position stably", () => {
 		expect(formatInlayHints([
 			{ position: { line: 1, character: 0 }, label: "later" },

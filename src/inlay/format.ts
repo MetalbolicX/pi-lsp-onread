@@ -7,7 +7,8 @@ export function formatInlayHints(hints: unknown[], maxChars: number, maxHints = 
 		const label = formatLabel(hint.label);
 		if (!label) return [];
 		const marker = hint.kind === 1 ? "[type] " : hint.kind === 2 ? "[param] " : "";
-		return [{ index, line, character, text: `L${line + 1}:C${character + 1}  ${marker}${label}` }];
+		const tooltip = formatTooltip(hint.tooltip);
+		return [{ index, line, character, text: `L${line + 1}:C${character + 1}  ${marker}${label}${tooltip ? ` — ${tooltip}` : ""}` }];
 	}).sort((left, right) => left.line - right.line || left.character - right.character || left.index - right.index);
 	const capped = readable.slice(0, Math.max(0, maxHints));
 	const lines = capped.map(({ text }) => text);
@@ -24,6 +25,17 @@ function formatLabel(value: unknown): string {
 		if (typeof part.text === "string") return part.text;
 		return typeof part.value === "string" ? part.value : "";
 	}).join("");
+}
+function formatTooltip(value: unknown): string {
+	const flatten = (item: unknown): string => {
+		if (typeof item === "string") return item;
+		if (!isRecord(item)) return "";
+		if (typeof item.value === "string") return item.value;
+		return "";
+	};
+	const text = (Array.isArray(value) ? value.map(flatten).filter(Boolean).join(" ") : flatten(value))
+		.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+	return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }
 function isCoordinate(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
