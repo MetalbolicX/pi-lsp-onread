@@ -60,22 +60,37 @@ approved navigation/inlay/call-hierarchy precedents.
 ## Tasks
 
 ### C1 — Editor one-shots: selection range, highlight, code lens (test-first)
-- [ ] RED: no session methods / no tool / no fixture handlers
-- [ ] GREEN: 3 session methods (flattened chain cap 20; highlight cap 100
-      + marker; lens window + cap 100 + marker), `lsp-editor-tools.ts` with
-      three registrations, fixture handlers under FAKE_NAVIGATION /
-      FAKE_CODE_LENS, extension wiring, tests
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed: 5 focused failures (session methods missing, editor
+      tools unregistered)
+- [x] GREEN: 3 session methods — `selectionRange` (iterative parent-chain
+      flatten, `depth < 20` bound ⇒ cycle-safe, integer-validated ranges,
+      malformed links skipped), `documentHighlight` (cap 100), `codeLens`
+      (range-intersection filter then cap 100); all gated truthy, null ⇒ ok
+      empty, never-throws; new `src/pi/lsp-editor-tools.ts` shared
+      `runEditor(mode)` core with count-cap omission markers, footer-
+      preserving truncation, lens "never executed / titles may be
+      unresolved" footer; fixture: selection/highlight under FAKE_NAVIGATION,
+      NEW FAKE_CODE_LENS (titled + command-less + out-of-range lens)
+- Route: delegated (gentle-ai-worker), commit `48d7903` (with C2 — shared
+  session/fixture/extension files; one coherent behavior unit).
 
 ### C2 — Type hierarchy (test-first)
-- [ ] RED: no prepare/directions path
-- [ ] GREEN: session methods + `lsp_type_hierarchy` tool (modes, remedy,
-      footer, kind map reuse) + FAKE_TYPE_HIERARCHY fixture + tests
-- Route: delegated (gentle-ai-worker).
+- [x] RED observed: 3 focused failures (prepare/directions + tool missing)
+- [x] GREEN: `prepareTypeHierarchy` + `typeHierarchyDirections` (gate
+      `typeHierarchyProvider`, 1000 cap, direction-literal);
+      `runCallHierarchy` generalized with `flavor: "call"|"type"` — exclusive
+      dispatch verified by parent (mode whitelist per flavor, noun/footer/
+      remedy parameterized, item rendering correct for BOTH shapes);
+      FAKE_TYPE_HIERARCHY fixture; tests extended
+- Route: delegated (gentle-ai-worker), commit `48d7903`.
 
 ### C3 — Docs + closure (parent)
-- [ ] README bullets; battery; work-unit commits; closure; slice review;
-      record
+- [x] README: four new bullets (type hierarchy, selection range, document
+      highlight, code lens) after the call-hierarchy entry
+- [x] Battery (gentle-ai-verify): 487 tests / 49 files (+9), lint 0,
+      typecheck clean, build clean, `git diff --check` clean,
+      mutation-clean
+- [x] Work units: `48d7903` (behavior), `d9f6a03` (README)
 - Route: parent.
 
 ## Non-goals
@@ -104,6 +119,13 @@ approved navigation/inlay/call-hierarchy precedents.
   (10/10 grep targets = 0). Evidence: symbolKindName nav-tools:283 private;
   inlay window :46-48; format tests 11 its. Branch created; C1+C2
   delegated as one sequential worker task.
+- 2026-10-07: worker returned full-battery green (487/49) with per-task RED
+  evidence and 515 authored lines (+/−21 on shared files). Parent spot-
+  checks: shared hierarchy-flow dispatch exclusive and correct for both
+  shapes; selection flatten cycle-safe (`depth < 20`); count-cap markers
+  present in both new modules; fixture flags gated; README four bullets.
+  Independent battery 5/5 green. Honest deviation: ~536 changed lines vs
+  ~400 advisory — recorded (precedent 521-line slice reviewed fine).
 
 ## Review record
 
