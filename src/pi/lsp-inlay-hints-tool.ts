@@ -68,13 +68,16 @@ async function runInlayHints(params: { path: string; startLine?: number; endLine
 			if (outcome.outcome === "failed") failures.push(`failed to retrieve inlay hints from ${serverId}`);
 			else if (outcome.outcome === "unsupported") unsupported.push(`${serverId} does not support inlay hints`);
 			else {
-				const hints: unknown[] = [];
-				for (const hint of outcome.hints) {
-					if (!canResolve || resolveAttempts >= MAX_RESOLVE_ATTEMPTS) { hints.push(hint); continue; }
+				const hints = await Promise.all(outcome.hints.map(async (hint) => {
+					if (!canResolve || resolveAttempts >= MAX_RESOLVE_ATTEMPTS) return hint;
 					resolveAttempts += 1;
-					const resolved = await session.resolveInlayHint(serverId, hint, timeoutMs, client);
-					hints.push(resolved.outcome === "ok" ? resolved.hint : hint);
-				}
+					try {
+						const resolved = await session.resolveInlayHint(serverId, hint, timeoutMs, client);
+						return resolved.outcome === "ok" ? resolved.hint : hint;
+					} catch {
+						return hint;
+					}
+				}));
 				results.push({ serverId, hints });
 			}
 		}

@@ -46,6 +46,31 @@ describe("lsp_inlay_hints", () => {
 		expect(lines.at(-1)).toContain("tooltips resolved when supported");
 		expect(lines.at(-1)).not.toContain("tooltips not resolved");
 	});
+	it("starts all candidate resolves before any completes and preserves hint order", async () => {
+		const { filePath, projectRoot, session, tool } = await setup({ resolveInlayHints: true });
+		const hints = [0, 1, 2].map((index) => ({ position: { line: 0, character: index }, label: `hint-${index}` }));
+		vi.spyOn(session, "inlayHints").mockResolvedValue({ outcome: "ok", hints });
+		const deferred: Array<(value: { outcome: "ok"; hint: unknown }) => void> = [];
+		const resolve = vi.spyOn(session, "resolveInlayHint").mockImplementation((_serverId, _hint) => new Promise((complete) => {
+			deferred.push((value) => complete(value));
+		}));
+		const execution = execute(tool, filePath, projectRoot);
+		try {
+			await vi.waitFor(() => expect(resolve).toHaveBeenCalled());
+			await new Promise((complete) => setTimeout(complete, 0));
+			expect(resolve).toHaveBeenCalledTimes(3);
+			for (const index of [2, 1, 0]) deferred[index]!({ outcome: "ok", hint: { ...hints[index], tooltip: `tooltip-${index}` } });
+			const lines = (await execution).split("\n");
+			expect(lines.slice(0, 3)).toEqual([
+				"L1:C1  hint-0 — tooltip-0",
+				"L1:C2  hint-1 — tooltip-1",
+				"L1:C3  hint-2 — tooltip-2",
+			]);
+		} finally {
+			for (const complete of deferred) complete({ outcome: "ok", hint: hints[deferred.indexOf(complete)] });
+		}
+	});
+
 	it("continues after resolve failures and caps attempts at twenty per range", async () => {
 		const { filePath, projectRoot, session, tool } = await setup({ resolveInlayHints: true });
 		const hints = Array.from({ length: 21 }, (_, index) => ({ position: { line: 0, character: index }, label: `hint-${index}` }));
