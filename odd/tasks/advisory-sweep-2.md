@@ -107,4 +107,11 @@ merge".
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-a262bbc063fe40f2`, medium tier
+  (`executable_change` on `src/pi/lsp-inlay-hints-tool.ts`),
+  review-reliability lens, 6 paths / 178 lines, correction budget 89, base
+  `39a0cdbd696e569b46fae41e77fb994e0419abe3` (committedOnly). Reviewer
+  forecast (1 host-relay run) acknowledged; approved on the last admitted
+  event with **ZERO findings — both ledger items retired, none added**;
+  acknowledgement burned (consumed revision `sha256:77b5c132…`).
+  Delivery: ordinary repository policy.
