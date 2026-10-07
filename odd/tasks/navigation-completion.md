@@ -131,4 +131,14 @@ grep (implementation: 0, typeDefinition: 0, callHierarchy: 0 hits in
 
 ## Review record
 
-- (pending)
+- Slice review APPROVED — lineage `review-55f391f3f0cd90d6`, medium tier
+  (`executable_change` on `src/extension.ts`), review-reliability lens,
+  9 paths / 521 lines, correction budget 200, base
+  `b7ce976952370f2895ccc3301780daab9b99f9a0` (committedOnly). Reviewer
+  forecast (1 host-relay run) acknowledged; approved on the last admitted
+  event; acknowledgement burned (consumed revision `sha256:c48731e0…`).
+  One NON-BLOCKING informational advisory: R3-001 reliability WARNING at
+  `src/pi/lsp-navigation-tools.ts:260` (malformed call-hierarchy `from`/
+  `to` sub-objects fall back to `{}` silently — renders `(unnamed)`
+  instead of being named malformed; ledger item). Delivery: ordinary
+  repository policy.
