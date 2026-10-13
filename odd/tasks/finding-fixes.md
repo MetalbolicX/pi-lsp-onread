@@ -127,3 +127,11 @@ F5; merge (user decides); layer-2 smoke; push.
   battery: bare 506/49+skip, lint/tsc/format green, gopls 8/8,
   rust-analyzer 8/8 with the flip outcomes recorded in L5). If a later
   reminder claims the target, the tight base above applies.
+- RDD reminder (target `sha256:a6382624…`) later claimed the slice:
+  **APPROVED — ZERO findings, no advisories** — lineage
+  `review-0b20afd031d3bf49`, medium (`executable_change`:
+  src/diagnostics/store.ts), `review-reliability` lens, 18 paths / 555
+  lines, correction budget 200, tight base `a6e29aa8af8…`
+  (committedOnly). Reviewer forecast (1 host-relay run) acknowledged;
+  approved on the last admitted event; acknowledgement burned (consumed
+  revision `sha256:d1cb156a…`). Delivery: ordinary repository policy.
