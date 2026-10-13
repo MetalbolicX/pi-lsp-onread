@@ -15,6 +15,7 @@ const codeLens = process.env.FAKE_CODE_LENS === "1";
 const typeHierarchy = process.env.FAKE_TYPE_HIERARCHY === "1";
 const codeActions = process.env.FAKE_CODE_ACTIONS === "1";
 const inlayHintResolve = process.env.FAKE_INLAY_HINT_RESOLVE === "1";
+const inlayHintEcho = process.env.FAKE_INLAY_HINT_ECHO === "1";
 const rename = process.env.FAKE_RENAME === "1";
 const formatting = process.env.FAKE_FORMATTING === "1";
 const renameBoolean = process.env.FAKE_RENAME_BOOLEAN === "1";
@@ -442,24 +443,25 @@ function handle(message) {
     };
     const result = message.method.endsWith("incomingCalls")
       ? [
+          // LSP CallHierarchyIncomingCall = { from, fromRanges } (no `to`).
           {
             from: peer,
-            to: item,
             fromRanges: [item?.selectionRange ?? { start: point, end: point }],
           },
           ...(malformedHierarchy
             ? [
-                { from: "not-an-object", to: item, fromRanges: [] },
+                { from: "not-an-object", fromRanges: [] },
                 { from: peer, to: 42, fromRanges: [] },
               ]
             : []),
         ]
       : [
+          // LSP CallHierarchyOutgoingCall = { to, fromRanges } (no `from`).
           {
-            from: item,
             to: peer,
             fromRanges: [item?.selectionRange ?? { start: point, end: point }],
           },
+          ...(malformedHierarchy ? [{ to: 42, fromRanges: [] }] : []),
         ];
     send({ jsonrpc: "2.0", id: message.id, result });
   } else if (message.method === "textDocument/prepareRename" && (rename || renameBoolean)) {
@@ -533,8 +535,51 @@ function handle(message) {
     const { uri } = message.params.textDocument;
     const { start, end } = message.params.range ?? {};
     const document = documents.get(uri);
+    if (document && start && end) {
+      // Mirror gopls's protocol.Mapper.PositionOffset validation: a position line may be at
+      // most the document's line count (the exclusive end-of-file line, character 0).
+      const lineCount = document.text.split("\n").length;
+      const offender =
+        Number.isInteger(start.line) && start.line > lineCount
+          ? start
+          : Number.isInteger(end.line) && end.line > lineCount
+            ? end
+            : undefined;
+      if (offender) {
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32602,
+            message: `line number ${offender.line} out of range 0-${lineCount}`,
+          },
+        });
+        return;
+      }
+      if (
+        (Number.isInteger(start.line) && start.line === lineCount && start.character !== 0) ||
+        (Number.isInteger(end.line) && end.line === lineCount && end.character !== 0)
+      ) {
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: { code: -32602, message: "column is beyond end of file" },
+        });
+        return;
+      }
+    }
+    const echo =
+      inlayHintEcho && start && end
+        ? [
+            {
+              position: { line: start.line, character: 0 },
+              label: `range ${start.line}-${end.line}`,
+            },
+          ]
+        : [];
     const hints = document
       ? [
+          ...echo,
           { position: { line: 0, character: 5 }, kind: 1, label: "string" },
           { position: { line: 0, character: 8 }, kind: 2, label: "argument" },
           ...(document.text.split("\n").length > 1

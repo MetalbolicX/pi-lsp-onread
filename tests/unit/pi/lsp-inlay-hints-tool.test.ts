@@ -35,11 +35,18 @@ afterEach(async () => {
   await Promise.all(projects.splice(0).map(removeProject));
 });
 async function setup(
-  options: { trusted?: boolean; servers?: number; resolveInlayHints?: boolean } = {},
+  options: {
+    trusted?: boolean;
+    servers?: number;
+    resolveInlayHints?: boolean;
+    echoInlayRange?: boolean;
+  } = {},
 ) {
   const project = await createProject(options.trusted ?? true);
   projects.push(project.projectRoot);
   const config = fakeConfig();
+  if (config.lsp !== false && options.echoInlayRange)
+    config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_INLAY_HINT_ECHO: "1" };
   if (options.resolveInlayHints && config.lsp !== false)
     config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_INLAY_HINT_RESOLVE: "1" };
   if (options.servers && options.servers > 1 && config.lsp !== false)
@@ -94,7 +101,7 @@ describe("lsp_inlay_hints", () => {
       "fake",
       expect.any(String),
       0,
-      200,
+      2,
       5000,
       expect.anything(),
     );
@@ -171,9 +178,46 @@ describe("lsp_inlay_hints", () => {
       "L2:C1   -> result",
     ]);
   });
+  it("converts the default window to a 0-based exclusive range clamped to the document length", async () => {
+    const { filePath, projectRoot, session, tool } = await setup({ echoInlayRange: true });
+    await writeFile(filePath, "first line\nsecond line\nthird line\n");
+    const request = vi.spyOn(session, "inlayHints");
+    const output = await execute(tool, filePath, projectRoot);
+    expect(output).not.toContain("failed to retrieve");
+    expect(output).toContain("range 0-4");
+    expect(output).toContain("L1:C6  [type] string");
+    expect(request).toHaveBeenLastCalledWith(
+      "fake",
+      expect.any(String),
+      0,
+      4,
+      5000,
+      expect.anything(),
+    );
+  });
+  it("clamps an explicit endLine past the document to the document length", async () => {
+    const { filePath, projectRoot, session, tool } = await setup({ echoInlayRange: true });
+    await writeFile(filePath, "first line\nsecond line\nthird line\n");
+    const request = vi.spyOn(session, "inlayHints");
+    const output = await execute(tool, filePath, projectRoot, 2, 40);
+    expect(output).not.toContain("failed to retrieve");
+    expect(output).toContain("range 1-4");
+    expect(request).toHaveBeenLastCalledWith(
+      "fake",
+      expect.any(String),
+      1,
+      4,
+      5000,
+      expect.anything(),
+    );
+  });
   it("uses a 200-line default window and clamps requests to 2000 lines", async () => {
     const { filePath, projectRoot, session, tool } = await setup();
     const request = vi.spyOn(session, "inlayHints").mockResolvedValue({ outcome: "ok", hints: [] });
+    await writeFile(
+      filePath,
+      Array.from({ length: 5000 }, (_, index) => `line ${index}`).join("\n"),
+    );
     await execute(tool, filePath, projectRoot);
     expect(request).toHaveBeenLastCalledWith(
       "fake",

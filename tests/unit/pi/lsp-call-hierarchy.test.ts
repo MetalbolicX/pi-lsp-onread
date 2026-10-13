@@ -33,12 +33,17 @@ afterEach(async () => {
   await Promise.all(sessions.splice(0).map((session) => session.dispose()));
   await Promise.all(projects.splice(0).map(removeProject));
 });
-async function setup(enabled: boolean) {
+async function setup(enabled: boolean, options: { malformed?: boolean } = {}) {
   const project = await createProject(true);
   projects.push(project.projectRoot);
   const config = fakeConfig();
   if (config.lsp === false) throw new Error("Expected LSP configuration");
-  if (enabled) config.lsp.fake!.env = { ...config.lsp.fake!.env, FAKE_CALL_HIERARCHY: "1" };
+  if (enabled)
+    config.lsp.fake!.env = {
+      ...config.lsp.fake!.env,
+      FAKE_CALL_HIERARCHY: "1",
+      ...(options.malformed ? { FAKE_MALFORMED_HIERARCHY: "1" } : {}),
+    };
   const session = await RuntimeSession.create({
     config,
     projectRoot: project.projectRoot,
@@ -93,6 +98,56 @@ describe("LSP call hierarchy", () => {
     });
     expect(output).toContain(mode === "incoming" ? "alphaPeer → alpha" : "alpha → alphaPeer");
     expect(output).toContain(`${filePath}:1:1`);
+  });
+  it("renders spec-shaped incoming calls as caller → prepared item", async () => {
+    const { filePath, projectRoot, tool } = await setup(true);
+    await writeFile(filePath, "function alpha() {}\nfunction beta() {}\n");
+    const item = {
+      name: "alpha",
+      kind: 12,
+      uri: `file://${filePath}`,
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      selectionRange: { start: { line: 0, character: 9 }, end: { line: 0, character: 14 } },
+    };
+    const output = await execute(tool, filePath, projectRoot, { mode: "incoming", item });
+    expect(output.split("\n")[0]).toBe(`alphaPeer → alpha — ${filePath}:1:1 → ${filePath}:1:10`);
+    expect(output).not.toContain("(malformed");
+  });
+  it("renders spec-shaped outgoing calls as prepared item → callee", async () => {
+    const { filePath, projectRoot, tool } = await setup(true);
+    await writeFile(filePath, "function alpha() {}\nfunction beta() {}\n");
+    const item = {
+      name: "alpha",
+      kind: 12,
+      uri: `file://${filePath}`,
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      selectionRange: { start: { line: 0, character: 9 }, end: { line: 0, character: 14 } },
+    };
+    const output = await execute(tool, filePath, projectRoot, { mode: "outgoing", item });
+    expect(output.split("\n")[0]).toBe(`alpha → alphaPeer — ${filePath}:1:10 → ${filePath}:1:1`);
+    expect(output).not.toContain("(malformed");
+  });
+  it("marks only genuinely non-record sides as malformed", async () => {
+    const { filePath, projectRoot, tool } = await setup(true, { malformed: true });
+    await writeFile(filePath, "function alpha() {}\nfunction beta() {}\n");
+    const item = {
+      name: "alpha",
+      kind: 12,
+      uri: `file://${filePath}`,
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      selectionRange: { start: { line: 0, character: 9 }, end: { line: 0, character: 14 } },
+    };
+    const incoming = (await execute(tool, filePath, projectRoot, { mode: "incoming", item })).split(
+      "\n",
+    );
+    expect(incoming[0]).toBe(`alphaPeer → alpha — ${filePath}:1:1 → ${filePath}:1:10`);
+    expect(incoming[1]).toBe(`(malformed source) → alpha — ? → ${filePath}:1:10`);
+    expect(incoming[2]).toBe(`alphaPeer → (malformed target) — ${filePath}:1:1 → ?`);
+    const outgoing = (await execute(tool, filePath, projectRoot, { mode: "outgoing", item })).split(
+      "\n",
+    );
+    expect(outgoing[0]).toBe(`alpha → alphaPeer — ${filePath}:1:10 → ${filePath}:1:1`);
+    expect(outgoing[1]).toBe(`alpha → (malformed target) — ${filePath}:1:10 → ?`);
   });
   it("explains that prepare must come first when the item is missing", async () => {
     const { filePath, projectRoot, tool } = await setup(true);

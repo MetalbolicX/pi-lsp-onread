@@ -64,6 +64,20 @@ async function runInlayHints(
       return text("startLine must be <= endLine.");
     if (endLine - startLine >= 2000) endLine = startLine + 1999;
 
+    // LSP ranges are 0-based with an exclusive end, so the 1-based inclusive
+    // [startLine, endLine] window covers [startLine - 1, endLine). Clamp both 0-based lines to
+    // the document's line count (the exclusive end-of-file line) so spec-strict servers such
+    // as gopls accept the default 200-line window on short files instead of rejecting it.
+    let startLine0 = startLine - 1;
+    let endLine0 = endLine;
+    try {
+      const lineCount = (await session.fsReadFile(absolutePath, "utf8")).split("\n").length;
+      startLine0 = Math.min(startLine0, lineCount);
+      endLine0 = Math.min(endLine0, lineCount);
+    } catch {
+      /* Unreadable document: send the requested window unchanged. */
+    }
+
     const uri = pathToFileURL(absolutePath).href;
     const failures: string[] = [];
     const unsupported: string[] = [];
@@ -90,8 +104,8 @@ async function runInlayHints(
       const outcome = await session.inlayHints(
         serverId,
         uri,
-        startLine - 1,
-        endLine,
+        startLine0,
+        endLine0,
         timeoutMs,
         client,
       );

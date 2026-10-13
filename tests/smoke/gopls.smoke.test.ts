@@ -476,6 +476,12 @@ describe.skipIf(!process.env.GOPLS_SMOKE)("layer-1 real gopls smoke", () => {
         });
         expect(incoming).not.toContain("failed to retrieve");
         expect(outgoing).not.toContain("failed to retrieve");
+        // Spec shape: incoming = { from, fromRanges } and outgoing = { to, fromRanges }, so a
+        // real server must never render the pre-fix malformed-side markers.
+        expect(incoming).not.toContain("(malformed target)");
+        expect(incoming).not.toContain("(malformed source)");
+        expect(outgoing).not.toContain("(malformed source)");
+        expect(outgoing).not.toContain("(malformed target)");
         observe(`S6 call hierarchy incoming calls:\n${incoming}`);
         observe(`S6 call hierarchy outgoing calls:\n${outgoing}`);
       }
@@ -576,26 +582,18 @@ describe.skipIf(!process.env.GOPLS_SMOKE)("layer-1 real gopls smoke", () => {
         if (inlayAdvertised) expect(hintOutput).toMatch(/L\d+:C\d+\s+\[(?:type|param)\]/);
       }
 
-      // Boundary probe: an end line at or past the last line (the tool's default 200-line
-      // window) is rejected by real gopls because the 1-based endLine is sent as a 0-based
-      // LSP line. Recorded as a finding; never swallowed.
-      const outOfRange = await toolText("lsp_inlay_hints", project.mainPath, {
+      // Boundary probe: the 1-based inclusive endLine is converted to a 0-based exclusive LSP
+      // line and clamped to the document length, so an end line past the last line — the
+      // default 200-line window on a short file — must succeed against real gopls.
+      const boundaryWindow = await toolText("lsp_inlay_hints", project.mainPath, {
         startLine: 1,
         endLine: 40,
       });
-      if (/failed to retrieve/.test(outOfRange)) {
-        const probe = await activeClient().request(
-          "textDocument/inlayHint",
-          {
-            textDocument: { uri: uri() },
-            range: { start: { line: 0, character: 0 }, end: { line: 40, character: 0 } },
-          },
-          REQUEST_TIMEOUT_MS,
-        );
-        observe(
-          `S6 FINDING lsp_inlay_hints rejects an end line past the document; raw gopls result: ${JSON.stringify(probe)}`,
-        );
-      }
+      expect(boundaryWindow).not.toContain("failed to retrieve");
+      expect(boundaryWindow).not.toContain("out of range");
+      observe(
+        `S6 inlay boundary probe (endLine 40, clamped to document length):\n${boundaryWindow}`,
+      );
     },
     TEST_TIMEOUT,
   );

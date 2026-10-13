@@ -442,14 +442,31 @@ async function runCallHierarchy(
           );
         } else {
           const call = raw as Record<string, unknown>;
-          const fromIsRecord = isRecord(call.from);
-          const toIsRecord = isRecord(call.to);
-          const from = (fromIsRecord ? call.from : {}) as Record<string, unknown>;
-          const to = (toIsRecord ? call.to : {}) as Record<string, unknown>;
           const ranges = Array.isArray(call.fromRanges) ? call.fromRanges : [];
-          lines.push(
-            `${fromIsRecord ? stringValue(from.name, "(unnamed)") : "(malformed source)"} → ${toIsRecord ? stringValue(to.name, "(unnamed)") : "(malformed target)"} — ${fromIsRecord ? itemPosition(from, ranges[0]) : "?"} → ${toIsRecord ? itemPosition(to) : "?"}`,
-          );
+          const prepared = isRecord(params.item) ? params.item : undefined;
+          const preparedName = prepared
+            ? stringValue(prepared.name, "(prepared item)")
+            : "(prepared item)";
+          const preparedPosition = prepared ? itemPosition(prepared) : "?";
+          if (mode === "incoming") {
+            // LSP CallHierarchyIncomingCall = { from, fromRanges }: the caller is `from` and
+            // the prepared item is the callee. Only `from` can be a genuinely non-record side.
+            const fromIsRecord = isRecord(call.from);
+            const from = (fromIsRecord ? call.from : {}) as Record<string, unknown>;
+            const strayTarget = call.to !== undefined && !isRecord(call.to);
+            lines.push(
+              `${fromIsRecord ? stringValue(from.name, "(unnamed)") : "(malformed source)"} → ${strayTarget ? "(malformed target)" : preparedName} — ${fromIsRecord ? itemPosition(from, ranges[0]) : "?"} → ${strayTarget ? "?" : preparedPosition}`,
+            );
+          } else {
+            // LSP CallHierarchyOutgoingCall = { to, fromRanges }: the prepared item is the
+            // caller and the callee is `to`. Only `to` can be a genuinely non-record side.
+            const toIsRecord = isRecord(call.to);
+            const to = (toIsRecord ? call.to : {}) as Record<string, unknown>;
+            const straySource = call.from !== undefined && !isRecord(call.from);
+            lines.push(
+              `${straySource ? "(malformed source)" : preparedName} → ${toIsRecord ? stringValue(to.name, "(unnamed)") : "(malformed target)"} — ${straySource ? "?" : preparedPosition} → ${toIsRecord ? itemPosition(to) : "?"}`,
+            );
+          }
         }
       }
       if (values.length > 100)
