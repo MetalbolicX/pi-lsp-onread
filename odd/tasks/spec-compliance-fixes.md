@@ -91,3 +91,15 @@ unaffected); behavior changes beyond spec compliance; push.
   incident; repaired via the recorded playbook
   (`node scripts/install-gentle-ai.mjs`, integrity re-verified) and the
   retry produced the verdict above.
+- RDD reminder (target `sha256:376f1854…`) later claimed the slice for
+  native review: **APPROVED — ZERO findings** — lineage
+  `review-2af5734d51e4918a`, medium (`executable_change`:
+  src/pi/lsp-inlay-hints-tool.ts), `review-reliability` lens, 8 paths /
+  334 lines, correction budget 167, tight base `46800348f0…`
+  (committedOnly; default origin base would exceed budget). Reviewer
+  forecast (1 host-relay run) acknowledged; approved on the last
+  admitted event; acknowledgement burned (consumed revision
+  `sha256:1bdd6677…`). Two submission hiccups honestly noted: a START
+  missing `"mode":"ordinary"` (no lineage created; retried complete)
+  and one corrupted capture binding (invalid JSON; resubmitted
+  byte-for-byte). Delivery: ordinary repository policy.
