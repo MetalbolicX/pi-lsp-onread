@@ -88,7 +88,18 @@ for Rust):
 - `pnpm smoke:rust-analyzer` needs `rust-analyzer` plus `cargo`/`rustc` (override the server
   with `RUST_ANALYZER_BIN`). Its fixture declares no dependencies, so `cargo check` is offline-safe.
 
-Bare `pnpm test` skips both suites because their env gates are unset.
+A layer-2 real-Pi-host smoke runs the built bundle inside a real Pi SDK session, driven by a
+scripted no-network model (no API key, no network):
+
+```sh
+pnpm smoke:pi-host         # pnpm build && PI_HOST_SMOKE=1 vitest run tests/smoke/pi-host.smoke.test.ts
+```
+
+It needs `gopls` on `PATH` (like the layer-1 Go smoke) and exercises the full host path:
+bundle load, all 18 tool registrations, the trust gate via the real CLI, read-driven server
+activation, and diagnostics surfaced through the real tool pipeline.
+
+Bare `pnpm test` skips all three suites because their env gates are unset.
 
 Try the extension locally:
 

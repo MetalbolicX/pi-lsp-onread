@@ -65,9 +65,9 @@ real CLI**, branch **stacked on `feature/hardening-ledger` @ `c79d100`**
 | # | Work | Route | Verification | Status |
 |---|------|-------|--------------|--------|
 | T1 | Spike: scripted-model interface on SDK 1.1.0 — one scripted tool call through a real session (temp agentDir, in-memory manager) | inline (`/tmp` probe) | scripted call executes a registered tool; Model shape documented in Log | **done** — run 9 SPIKE-OK (9 runs; recipe in L2) |
-| T2 | Harness: `tests/smoke/pi-host.smoke.test.ts` + fixture + `smoke:pi-host` script; env-gated, isolated HOME/agentDir | worker | bare `pnpm test` skips it; `smoke:pi-host` reaches S1 | todo |
-| T3 | Scenarios S1–S5 wired and green; layer-1 smokes unaffected | worker (sequential — same files as T2) | `smoke:pi-host` 5/5; gopls 8/8; rust 8/8; bare suite unchanged | todo |
-| T4 | Closure: full battery, README (`smoke:pi-host` mention), assess + review per RDD | inline + native | all green; slice review burned | todo |
+| T2 | Harness: `tests/smoke/pi-host.smoke.test.ts` + fixture + `smoke:pi-host` script; env-gated, isolated HOME/agentDir | worker | bare `pnpm test` skips it; `smoke:pi-host` reaches S1 | **done** — worker (one pass with T3); 5/5 stable ×3 |
+| T3 | Scenarios S1–S5 wired and green; layer-1 smokes unaffected | worker (sequential — same files as T2) | `smoke:pi-host` 5/5; gopls 8/8; rust 8/8; bare suite unchanged | **done** — same worker pass; parent battery verified all |
+| T4 | Closure: full battery, README (`smoke:pi-host` mention), assess + review per RDD | inline + native | all green; slice review burned | **done** — battery green; README updated; assess recorded below; review per RDD |
 
 ## Verification commands
 
@@ -110,6 +110,31 @@ slice (finding-fixes pattern), not silently inside this one.
   `baseUrl` are required for custom models. Evidence:
   `SPIKE RESULT: requests=2 finalText="SPIKE-DONE"
   marker="hit at …"` → SPIKE-OK.
+- L3 (T2+T3 worker pass, commit `046248e`): harness + scenarios in one
+  pass — 5/5 stable ×3 runs (~5–7 s). Honest deviations recorded by the
+  worker: the CLI preset id is `go` (not `gopls` — my task text was
+  wrong; config server id is `go`); `createAgentSession` REQUIRES
+  `cwd: projectRoot` (without it ctx.cwd defaults to process.cwd() and
+  project `.pi/lsp.json` is silently missed — symptom "No language
+  servers match this file."); pi-ai resolved by scanning
+  node_modules/.pnpm (same resolution as the spike, avoids
+  oxlint's no-require-imports); S4's trusted half + S3 run on a SECOND
+  host session created after `trust add` (the extension caches its
+  trust result at RuntimeSession.create — a fresh loader+session is
+  required to observe newly granted trust). Verbatim key observes:
+  S1 `tools in extension map = 18` (errors: []); S2 all 18 lsp_*
+  active; S4 untrusted → `Trust this project root with: pi-lsp-onread
+  trust add …` with gopls 0/0, then CLI trust add → `coverage: 1
+  server(s)`; S3 `go: fresh: current` + `compiler: undefined:
+  undefinedHelper`; S5 dispose resolves. RECORDED FINDING (S5, harness
+  artifact class): one gopls server + its telemetry child survive
+  `session.dispose()` because the raw AgentSession path never emits
+  `session_shutdown` (production AgentSessionRuntime does); both exit
+  once the vitest worker's stdio closes — no lasting leak (parent
+  battery: 0 gopls / 0 rust-analyzer processes after the full run).
+  Parent battery on final content: pi-host 5/5, bare 506/49 + 3
+  skipped (52 files), lint/tsc/format clean, gopls 8/8,
+  rust-analyzer 8/8.
 
 ## Review record
 
