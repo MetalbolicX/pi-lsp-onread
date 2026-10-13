@@ -43,13 +43,40 @@ unaffected); behavior changes beyond spec compliance; push.
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 RED→GREEN both fixes + fixture re-shape + smoke expectation sync | F1, F2 | worker (sequential; shared fixture) | C1/C2 |
-| T2 Parent spot-check + battery + gated smoke rerun | F1, F2 | parent | — |
-| T3 Commits, closure, assess/review, record | all | parent | C3+ |
+| [x] T1 RED→GREEN both fixes + fixture re-shape + smoke expectation sync | F1, F2 | worker (sequential; shared fixture) | `88f0c29` |
+| [x] T2 Parent spot-check + battery + gated smoke rerun | F1, F2 | parent | — |
+| [ ] T3 Commits, closure, assess/review, record | all | parent | C3+ |
 
 ## Log
 
 - L1: "Apply your suggestions" — authorized.
+- L2 (T1 evidence, worker): RED F1 verbatim — reshaped like-gopls fixture
+  rejects raw end=200/end=40: `expected 'failed to retrieve inlay hints
+  from f…' not to contain 'failed to retrieve'` (4 failed | 7 passed);
+  GREEN 11/11. RED F2 verbatim — spec-shaped incoming rendered
+  `alphaPeer → (malformed target) — …:1:1 → ?` (expected `… → alpha`);
+  outgoing `(malformed source) → alphaPeer — ? → …:1:1` (5 failed |
+  4 passed); GREEN 24/24 incl. untouched
+  `lsp-navigation-tools.test.ts` malformed coverage. +5 unit tests
+  (494 total / 49 files + smoke skip).
+- L3 (T1 deviations, accepted): also clamps 0-based `start` (window
+  starting past EOF sends a valid empty range instead of a rejected
+  start>end); fixture keeps a stray-non-record `to` malformed probe
+  (required by out-of-surface `lsp-navigation-tools.test.ts` coverage);
+  "before" real-gopls lines cited from L5 of real-server-smoke (pre-fix
+  renderer behavior observed verbatim in unit RED).
+- L4 (T2 evidence, parent): hunks verified (F1 = EOF-line clamp via
+  `session.fsReadFile` — the 0-based conversion itself pre-existed, the
+  missing clamp was the bug; F2 = mode-aware spec rendering with
+  stray-field-only markers); independent rerun: `pnpm test` 494 passed |
+  8 skipped (49 files + skipped smoke), lint/typecheck clean,
+  `GOPLS_SMOKE=1` smoke 8/8 vs real gopls v0.23.0 with corrected truth:
+  incoming `main → callee — main.go:5:6 → lib.go:9:6`, outgoing
+  `callee → ToUpper — lib.go:9:6 → strings.go:668:6`, boundary endLine 40
+  succeeds (no "failed to retrieve", no "out of range").
+- L5 (commits): one coherent behavior commit `88f0c29` (fixture shared
+  by F1/F2 — established single-commit decision); closure recorded
+  here.
 
 ## Review record
 
