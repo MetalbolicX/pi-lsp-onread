@@ -196,6 +196,23 @@ rust-analyzer-side behavior for F5; merging this slice (user decides).
   corrected to `check` (+ `lens.enable`); rust smoke 8/8 after.
   No product (src/) change in this slice.
 
+- L4 (T4 closure): battery on final content — bare `pnpm test`
+  **506 passed | 16 skipped** (49 files; both smokes skip), lint,
+  typecheck, build, `format:check` all clean, **gopls smoke 8/8**
+  (PATH-default binary), **rust-analyzer smoke 8/8** (PATH-default
+  binary + corrected settings shape), tree clean. README unchanged —
+  no product behavior changed in this slice. Branch:
+  `c2bb060` plan → `811c731` audit → `0ff03f9` smoke hygiene →
+  `40720e5` settings fix + dispositions (4 commits over main
+  `dd4fa97`).
+
 ## Review record
 
-- (pending implementation)
+- Post-implementation assess (committed range, base
+  `dd4fa97fcd6ae28dc370d4ede29244954ab531d9`): **medium risk**
+  (`executable_change`: tests/smoke/gopls.smoke.test.ts), 3 paths /
+  265 lines, **reviewDue: false (`under_budget`)** — writer
+  self-verification stands (workers' verbatim outcomes + parent
+  spot-checks + full battery both smokes). No native review started
+  per entry rule; if a later reminder claims this target, the tight
+  base above applies.
