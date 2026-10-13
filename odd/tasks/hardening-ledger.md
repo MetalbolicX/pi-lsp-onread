@@ -216,3 +216,12 @@ rust-analyzer-side behavior for F5; merging this slice (user decides).
   spot-checks + full battery both smokes). No native review started
   per entry rule; if a later reminder claims this target, the tight
   base above applies.
+- RDD reminder (target `sha256:0a6e95e5…`) later claimed the slice:
+  **APPROVED — ZERO findings, no advisories** — lineage
+  `review-c527e94ae95b35dd`, medium (`executable_change`:
+  tests/smoke/gopls.smoke.test.ts), `review-reliability` lens, 3
+  paths / 282 lines, correction budget 141, tight base
+  `dd4fa97fcd6…` (committedOnly). Reviewer forecast (1 host-relay
+  run) acknowledged; approved on the last admitted event;
+  acknowledgement burned (consumed revision `sha256:4b13d5cd…`).
+  Delivery: ordinary repository policy.
