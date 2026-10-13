@@ -61,7 +61,7 @@ rust-analyzer-smoke.md` (L4 F5, review record R3-001),
 
 | # | Work | Route | Verification | Status |
 |---|------|-------|--------------|--------|
-| T0 | Advisory-tail audit: classify seed list, fix trivially-live items | inline (reads) + worker if fixes span files | fixed/stale/live table below; unit green | todo |
+| T0 | Advisory-tail audit: classify seed list, fix trivially-live items | inline (reads) + worker if fixes span files | fixed/stale/live table below; unit green | **done** — docs-only; no live item met the RED→GREEN bar (table below) |
 | T1 | Smoke hygiene: PATH-default bins (both tests), gopls S5 shared-marker assertions | worker | both gated smokes 8/8; bare test spawns nothing | todo |
 | T2 | F9 store merge + F8 context verification (one coherent product commit; shared store/session/fixture surfaces) | worker (RED→GREEN) | unit: interleaved two-source pushes preserve both; rust smoke S3 delta always-assertable (auto-tighten) or F9 honestly stays recorded; S5 flip on RA asserted; gopls 8/8 | todo |
 | T3 | F5 probe + disposition | inline (probe) + docs | probe evidence verbatim in Log; client-side fix or documented server-side finding | todo |
@@ -87,6 +87,33 @@ rust-analyzer-smoke.md` (L4 F5, review record R3-001),
   (gap-closure), session.ts:209 (b3776b7), activation.ts:81 (76dc220),
   the 13-item CLI batch (advisory-cleanup).
 
+## Audit result (T0)
+
+Classification = current-source read of each pattern family (receipt
+prose was not preserved verbatim for most items; historical line
+numbers only locate the era).
+
+| Seed item | Class | Evidence |
+|---|---|---|
+| session.ts :209/:215 (pull-report validation) | fixed | b3776b7 (malformed pull rejected before state updates); recordPull preservation reworked in finding-fixes |
+| session.ts :358 (hover), :395 (formatting), :215-era symbols | stale | current hover/formatting/workspaceSymbols/documentSymbol paths all use the uniform outcome-guard pattern (capability → unsupported, timeout ≤ 0 → failed, response-shape validation → failed, catch → failed); unit-tested |
+| preview/workspace-edit.ts:70-74 | stale | validation rewritten: try/catch URI decode, out-of-root rejection, malformed-edit reasons, overlap detection, range-bounds warnings |
+| preview/workspace-edit.ts:219 | live-minor, left with reason | renderWorkspaceEdit char-budget arithmetic is hard to read (`candidateWithReserve` names a length; `omitted += totalEdits - renderedEdits - omitted`); bounds are covered by existing tests and no deterministic failure is reproducible — below the RED→GREEN bar |
+| lsp-organize-imports-tool.ts:58 | stale | outcome-explicit loop (failed/unsupported/no-actions/omissions) with exact+prefix action matching and omission counting; reworked and tested since |
+| lsp-code-actions-tool.ts:105 | live-by-design, left with reason | index-based selection between a listing call and a later preview call is inherent to the stateless list-then-select contract (documented via footer); deterministic within one result sequence |
+| lsp-navigation-tools.ts:89 | stale | navigation tools rewritten in navigation-completion (1-based validation, bounded formatters); the :260 malformed-hierarchy concern retired by advisory-sweep-2 S1 |
+| diagnostics/format.ts:52-53 family | stale | explicit pending/stale-behind/current/unknown freshness branches, truncation marker, dropped-count lines; format tests cover |
+| runtime/activation.ts :81 | fixed | 76dc220 (waiter registered only after successful sync; message renamed) |
+| runtime/activation.ts :100-113 | verified sound | advisory-cleanup verified timer+waiter cleanup present; re-confirmed: clearTimeout after every race, waiters cancelled |
+| runtime/activation.ts :162/:166/:207 | stale | publication-wait / pull-reserve / workspace-pull paths reworked with explicit budgets and cleanup |
+| RETIRED batch | verified | sweep-2 S1 + S2, gap-closure (extension.ts:102-104), b3776b7, 76dc220, advisory-cleanup (13 CLI items) |
+
+**Ledger conclusion:** the tail is retired. Two live items remain
+by documented design/readability reasons (workspace-edit render
+budget; code-action index stability) — neither admits a
+deterministic RED→GREEN fix. The active ledger after this audit is
+exactly F5 / F8 / F9 + the two smoke advisories (T1–T3).
+
 ## Verification commands
 
 - `pnpm test` (bare — both smokes skip, no servers spawn)
@@ -109,6 +136,11 @@ rust-analyzer-side behavior for F5; merging this slice (user decides).
   work-unit commits. PATH resolution verified for both servers
   (`gopls` v0.23.0, `rust-analyzer` 1.95.0) before committing to the
   bin-default flip.
+- L2 (T0 audit): classification table above. Honest outcome: the
+  advisory tail is retired by later rework; NO live item met the
+  RED→GREEN bar, so T0 stayed docs-only (no speculative "fixes").
+  Reviewer prose was not preserved for most historical items, so
+  classification is by pattern family against current source.
 
 ## Review record
 
