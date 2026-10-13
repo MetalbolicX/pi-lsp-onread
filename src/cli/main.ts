@@ -8,82 +8,82 @@ import { list } from "./commands/list.js";
 import { trust } from "./commands/trust.js";
 
 function readVersion(): string {
-	try {
-		const raw = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
-		const pkg = JSON.parse(raw) as { version?: string };
-		return pkg.version ?? "0.0.0";
-	} catch {
-		return "0.0.0";
-	}
+  try {
+    const raw = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
+    const pkg = JSON.parse(raw) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
 }
 
 function usage(): string {
-	return [
-		"pi-lsp-onread — project LSP configuration for the Pi coding agent",
-		"",
-		"Usage:",
-		"  pi-lsp-onread init [--project <path>] [--languages a,b] [--dry-run] [--yes]",
-		"                                  Create or extend .pi/lsp.json",
-		"  pi-lsp-onread add <preset...> [--project <path>] [--dry-run] [--yes]",
-		"                                  Add language presets to config non-interactively",
-		"  pi-lsp-onread list                List available language presets",
-		"  pi-lsp-onread check [--project <path>]  Validate config and statically check server executables",
-		"  pi-lsp-onread install [--local] [--dry-run]  Register this Pi extension natively",
-		"",
-		"Trust:",
-		"  pi-lsp-onread trust [list]        List trusted roots",
-		"  pi-lsp-onread trust add [path]    Trust a canonical project root (default: cwd)",
-		"  pi-lsp-onread trust remove [path] Remove an exact trusted root (default: cwd)",
-		"  Trust is an explicit allowlist; roots match exactly and commands never prompt.",
-		"  Store: ~/.pi/agent/lsp.trust.json",
-		"  Trust commands exit 0 on success and 1 on errors.",
-		"  pi-lsp-onread --version           Print version",
-		"",
-		"Options:",
-		"  --project <path>   Target another project (default: current directory)",
-		"  --dry-run          Preview changes without writing",
-		"  --yes              Approve non-conflicting generation non-interactively",
-		"  --local            Register in project scope instead of personal scope",
-		"  install requires the 'pi' CLI on PATH; --dry-run only prints the command.",
-		"",
-		"The CLI generates configuration only. It never downloads or installs",
-		"language servers and never launches builds.",
-	].join("\n");
+  return [
+    "pi-lsp-onread — project LSP configuration for the Pi coding agent",
+    "",
+    "Usage:",
+    "  pi-lsp-onread init [--project <path>] [--languages a,b] [--dry-run] [--yes]",
+    "                                  Create or extend .pi/lsp.json",
+    "  pi-lsp-onread add <preset...> [--project <path>] [--dry-run] [--yes]",
+    "                                  Add language presets to config non-interactively",
+    "  pi-lsp-onread list                List available language presets",
+    "  pi-lsp-onread check [--project <path>]  Validate config and statically check server executables",
+    "  pi-lsp-onread install [--local] [--dry-run]  Register this Pi extension natively",
+    "",
+    "Trust:",
+    "  pi-lsp-onread trust [list]        List trusted roots",
+    "  pi-lsp-onread trust add [path]    Trust a canonical project root (default: cwd)",
+    "  pi-lsp-onread trust remove [path] Remove an exact trusted root (default: cwd)",
+    "  Trust is an explicit allowlist; roots match exactly and commands never prompt.",
+    "  Store: ~/.pi/agent/lsp.trust.json",
+    "  Trust commands exit 0 on success and 1 on errors.",
+    "  pi-lsp-onread --version           Print version",
+    "",
+    "Options:",
+    "  --project <path>   Target another project (default: current directory)",
+    "  --dry-run          Preview changes without writing",
+    "  --yes              Approve non-conflicting generation non-interactively",
+    "  --local            Register in project scope instead of personal scope",
+    "  install requires the 'pi' CLI on PATH; --dry-run only prints the command.",
+    "",
+    "The CLI generates configuration only. It never downloads or installs",
+    "language servers and never launches builds.",
+  ].join("\n");
 }
 
 export interface MainOptions {
-	pathEnv?: string;
-	piRunner?: PiRunner;
-	trustStorePath?: string;
+  pathEnv?: string;
+  piRunner?: PiRunner;
+  trustStorePath?: string;
 }
 
 export async function main(argv: readonly string[], options: MainOptions = {}): Promise<number> {
-	const [command = "help"] = argv;
-	switch (command) {
-		case "help":
-		case "--help":
-		case "-h":
-			console.log(usage());
-			return 0;
-		case "--version":
-		case "-v":
-			console.log(readVersion());
-			return 0;
-		case "list":
-			return list();
-		case "init":
-			return init(argv.slice(1));
-		case "add":
-			return add(argv.slice(1));
-		case "check":
-			return check(argv.slice(1));
-		case "install":
-			return install(argv.slice(1), { pathEnv: options.pathEnv, runner: options.piRunner });
-		case "trust":
-			return trust(argv.slice(1), { storePath: options.trustStorePath });
-		default:
-			console.error(`Unknown command: ${command}\n`);
-			console.error(usage());
-			return 1;
-	}
+  const [command = "help"] = argv;
+  switch (command) {
+    case "help":
+    case "--help":
+    case "-h":
+      console.log(usage());
+      return 0;
+    case "--version":
+    case "-v":
+      console.log(readVersion());
+      return 0;
+    case "list":
+      return list();
+    case "init":
+      return init(argv.slice(1));
+    case "add":
+      return add(argv.slice(1));
+    case "check":
+      return check(argv.slice(1));
+    case "install":
+      return install(argv.slice(1), { pathEnv: options.pathEnv, runner: options.piRunner });
+    case "trust":
+      return trust(argv.slice(1), { storePath: options.trustStorePath });
+    default:
+      console.error(`Unknown command: ${command}\n`);
+      console.error(usage());
+      return 1;
+  }
 }
