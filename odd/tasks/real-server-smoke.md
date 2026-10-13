@@ -65,6 +65,33 @@ product-code changes; installing anything.
 - L2: "Follow the recommendation. Is other thing to consider?" —
   authorization to execute the gopls smoke per plan; consideration
   question answered at close.
+- L3 (evidence): commit `55695ff` — tests/smoke/{go-smoke-fixture,gopls}.smoke
+  (787 lines), `smoke:gopls` script, README Development note. Gated smoke
+  **8/8 green vs real gopls v0.23.0 / go1.27.1 linux/amd64**; bare `pnpm
+  test` 489/49 green with smoke skipped (no spawn); lint/typecheck clean;
+  parent independent rerun confirmed. No RED applicable (observation
+  harness; product code unchanged) — stated, not fabricated.
+- L4 (observations verbatim): positionEncoding unset (utf-16 default);
+  read path 0–1ms non-waiting; error surfaced "fresh: current / 8:14
+  compiler: undefined: undefinedHelper"; fix-edit delta "0 newly observed,
+  1 resolved" in 4–6ms; UTF-16 probe L7:C20 → lib.go:9:6-9:12; references
+  3 hits; hover/symbols correct; previews left main.go/lib.go
+  byte-identical; call/type hierarchy, selection range (7 nested),
+  document highlight (2), code lens (`L5:C1 "run test"`), inlay hints
+  (`[param]`, `[type] int`) all functional; rename prepare honestly
+  unsupported (gopls advertises renameProvider without prepareProvider),
+  rename preview multi-file; dispose idempotent, post-dispose names
+  disposed state.
+- L5 (FINDINGS — product defects surfaced, unfixed, out of smoke scope):
+  - **F1 inlay end-line off-by-one**: `lsp_inlay_hints` passes the 1-based
+    inclusive `endLine` through as a 0-based LSP line without clamping to
+    document length; ranges at/past the last line — including the default
+    200-line window on short files — are rejected by gopls
+    (`line number 40 out of range 0-15`).
+  - **F2 call-hierarchy renderer**: spec-compliant incoming calls carry
+    only `from` and outgoing only `to` (+`fromRanges`); the renderer
+    requires both records, so real servers render `(malformed target)` /
+    `(malformed source)` on every entry.
 
 ## Review record
 
