@@ -49,14 +49,66 @@ changes; CI wiring.
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 Author gated rust-analyzer smoke (fixture + suite, optional shared-harness extraction) | S1–S8 | worker | C1 |
-| T2 Parent re-run: unit battery + gated smoke both servers | S1–S8 | parent | — |
-| T3 Closure, commits, assess | all | parent | C2+ |
+| [x] T1 Author gated rust-analyzer smoke (fixture + suite) | S1–S8 | worker + parent | C1 |
+| [x] T2 Parent re-run: unit battery + gated smoke both servers | S1–S8 | parent | — |
+| [ ] T3 Closure, commits, assess | all | parent | C2+ |
 
 ## Log
 
 - L1: "continue with rust analyzer" — authorized. Inventory:
   rust-analyzer, cargo, rustc all on PATH (cargo bin dir).
+- L2 (blocker, user-resolved): the PATH `rust-analyzer` is a rustup proxy
+  with the component ABSENT (verbatim: `Unknown binary 'rust-analyzer'
+  in official toolchain 'stable-x86_64-unknown-linux-gnu'`). User chose
+  "Install component" → `rustup component add rust-analyzer` →
+  `rust-analyzer 1.95.0 (5980761 2026-04-14)`; cargo 1.95.0, rustc 1.95.0.
+- L3 (T1 evidence): harness authored by worker (fixture + gated suite,
+  `smoke:rust-analyzer` script, README note); first real run 5/8 — three
+  failures diagnosed by parent with a standalone framed-LSP probe
+  (/tmp/ra-probe.mjs, Content-Length protocol, NOT repo code).
+- L4 (FINDINGS — all PRODUCT-side unless noted, all UNFIXED, fix decision
+  is the user's; each is asserted verbatim in the smoke so fixes flip it):
+  - **F3 codeAction context omitted**: `session.codeActions` sends
+    `textDocument/codeAction` with `{ textDocument, range }` only — the
+    LSP-REQUIRED `context` param is missing. gopls tolerated; rust-analyzer
+    rejects ("failed to retrieve code actions"). Probe with
+    `context: { diagnostics: [] }` returns clean `null`. Full fix must also
+    send the file's current diagnostics (servers filter quickfixes by
+    context.diagnostics).
+  - **F4 pull clobbers push**: probe proved RA PUSHES flycheck E0425
+    (`undefined_helper`, source rustc) within ~2s, yet the tool showed
+    `fresh: current / no diagnostics received` for 120s: `pullFresh`
+    records each pull "full" report as the authoritative snapshot, and RA's
+    pull view (native diagnostics only) omits flycheck results — every
+    `lsp_diagnostics` poll re-clobbers the pushed error.
+  - **F5 codeLens advertised-but-empty** (interaction finding):
+  `codeLensProvider` advertised, lens settings sent (`lens.run.enable`),
+    `#[test]` fn in range — yet zero lenses returned. RA-side investigation;
+    the tool's empty-with-coverage output is honest.
+  - **F6 EOF clamp off-by-one (amends F1)**: the F1 clamp uses
+    `split("\n").length`, one past the LSP-legal EOF line (valid max =
+    length − 1 for files ending in a newline). Probe error verbatim:
+    `Invalid offset LineCol { line: 12, col: 0 } (line index length: 183)`.
+    gopls tolerates the one-past line (its smoke passed); rust-analyzer
+    rejects — so the DEFAULT 200-line inlay window fails on any short file
+    against RA. Same request-shape class as F3.
+- L5 (T1 harness edits): S3/S5/S6 converted to finding-observation
+  branches (assert each finding shape verbatim; original success assertions
+  run automatically once the fixes land — never loosened silently). Also:
+  rename prepare confirmed `prepareProvider: true` ("ready to rename",
+  placeholder recorded — gopls lacked it); formatting preview (rustfmt) ok;
+  rename preview multi-file ok; disk byte-identical after all previews;
+  call hierarchy spec-shaped on a real server (`main → callee`,
+  `callee → to_uppercase` — stdlib location resolved); type hierarchy
+  genuinely unsupported (capability absent); selection_range (7 nested ok
+  on gopls) / document_highlight ok; S1/S7/S8 pass (no-spawn untrusted,
+  dispose idempotent, isolated temp+trust).
+- L6 (T2 evidence): bare `pnpm test` 494 passed | 16 skipped (51 files,
+  both smokes skipped — never spawns); lint/tsc/format green (after removing
+  an orphaned helper + biome format on the touched file); BOTH gated smokes
+  green on final content: gopls 8/8, rust-analyzer 8/8 (duration ~21s,
+  finding paths; five FINDING observations captured verbatim via
+  `--silent=false`).
 
 ## Review record
 
