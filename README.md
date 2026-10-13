@@ -73,6 +73,16 @@ pnpm test
 pnpm lint && pnpm typecheck
 ```
 
+Layer-1 real-server smoke for gopls is gated and never runs under bare `pnpm test`:
+
+```sh
+pnpm smoke:gopls   # GOPLS_SMOKE=1 vitest run tests/smoke
+```
+
+It needs a locally installed `gopls` and Go toolchain (override with `GOPLS_BIN`/`GO_BIN`),
+spawns your gopls against a stdlib-only temp fixture, and writes only normal user-level
+gopls caches.
+
 Try the extension locally:
 
 ```sh
