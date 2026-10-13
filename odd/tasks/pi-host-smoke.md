@@ -138,4 +138,12 @@ slice (finding-fixes pattern), not silently inside this one.
 
 ## Review record
 
-- (pending implementation)
+- Post-implementation assess (committed range, base
+  `c79d1003e49e6944e43565951da0abaf40fae1af`): **medium risk**
+  (`configuration_change`: package.json), 5 paths / 679 lines,
+  **reviewDue: false (`under_budget`)** — writer self-verification
+  stands (worker verbatim outcomes ×3 runs + parent spot-check + full
+  battery: pi-host 5/5, both layer-1 smokes 8/8, bare suite unchanged,
+  lint/tsc/format clean, zero orphan servers). No native review started
+  per entry rule; if a later reminder claims this target, the tight
+  base above applies.
