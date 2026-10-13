@@ -19,7 +19,7 @@ import {
 } from "./go-smoke-fixture.js";
 
 const execFileAsync = promisify(execFile);
-const GOPLS_BIN = process.env.GOPLS_BIN ?? "/home/metalbolicx/go/bin/gopls";
+const GOPLS_BIN = process.env.GOPLS_BIN ?? "gopls";
 const GO_BIN = process.env.GO_BIN ?? "go";
 const SERVER_ID = "gopls";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -35,6 +35,34 @@ const GOPLS_SETTINGS = {
     generate: true,
   },
 };
+
+/**
+ * Single definition point for the renderer prose the S5 block asserts and guards against.
+ * None of these phrases are exported by src/, so they are pinned here; each comment ties the
+ * literal to the renderer that emits it. If a renderer is reworded, update its entry once here
+ * rather than chasing scattered inline strings in the assertions.
+ */
+const MARKERS = {
+  // Shared preview footer prefix: lsp-formatting-tool.ts:160, lsp-organize-imports-tool.ts:152,
+  // lsp-code-actions-tool.ts:14, lsp-rename-tool.ts:200.
+  previewOnly: "preview only",
+  // Formatting failure line: lsp-formatting-tool.ts:122 (also the shared failure prefix elsewhere).
+  failedToRetrieve: "failed to retrieve",
+  // Formatting unsupported line: lsp-formatting-tool.ts:120.
+  formattingUnsupported: "does not support formatting",
+  // Code-actions unsupported line: lsp-organize-imports-tool.ts:85, lsp-code-actions-tool.ts:99.
+  codeActionsUnsupported: "does not support code actions",
+  // Empty formatting body line: lsp-formatting-tool.ts:176.
+  noFormattingPreview: "No formatting preview available.",
+  // Unresolvable code-action preview line: lsp-code-actions-tool.ts:171.
+  failedToResolveAction: "failed to resolve action",
+  // Rename prepare success line: lsp-rename-tool.ts:141.
+  readyToRename: "ready to rename",
+  // Rename prepare unsupported line: lsp-rename-tool.ts:105.
+  prepareRenameUnsupported: "does not support prepareRename",
+  // Rename preview failure line: lsp-rename-tool.ts:171.
+  failedToRetrieveRenameEdit: "failed to retrieve rename edit",
+} as const;
 
 type Tool = {
   name: string;
@@ -372,15 +400,15 @@ describe.skipIf(!process.env.GOPLS_SMOKE)("layer-1 real gopls smoke", () => {
       const libBefore = await readFile(project.libPath, "utf8");
 
       const formatting = await toolText("lsp_formatting", project.mainPath);
-      expect(formatting).not.toContain("failed to retrieve");
-      expect(formatting).not.toContain("does not support formatting");
-      expect(formatting).toContain("preview only");
+      expect(formatting).not.toContain(MARKERS.failedToRetrieve);
+      expect(formatting).not.toContain(MARKERS.formattingUnsupported);
+      expect(formatting).toContain(MARKERS.previewOnly);
       observe(`S5 formatting preview:\n${formatting}`);
 
       const organize = await toolText("lsp_organize_imports", project.libPath);
-      expect(organize).not.toContain("does not support code actions");
-      expect(organize).toContain("preview only");
-      expect(organize).not.toContain("No formatting preview available.");
+      expect(organize).not.toContain(MARKERS.codeActionsUnsupported);
+      expect(organize).toContain(MARKERS.previewOnly);
+      expect(organize).not.toContain(MARKERS.noFormattingPreview);
       observe(`S5 organize-imports preview:\n${organize}`);
 
       const libLines = libGo.split("\n");
@@ -399,8 +427,8 @@ describe.skipIf(!process.env.GOPLS_SMOKE)("layer-1 real gopls smoke", () => {
         ...osPosition,
         action: actionIndex,
       });
-      expect(preview).toContain("preview only");
-      expect(preview).not.toContain("failed to resolve action");
+      expect(preview).toContain(MARKERS.previewOnly);
+      expect(preview).not.toContain(MARKERS.failedToResolveAction);
       observe(`S5 code action ${actionIndex} preview:\n${preview}`);
 
       const mainLines = fixedMainGo.split("\n");
@@ -411,10 +439,10 @@ describe.skipIf(!process.env.GOPLS_SMOKE)("layer-1 real gopls smoke", () => {
         ...renamePosition,
         mode: "prepare",
       });
-      if (/does not support prepareRename/.test(prepare)) {
+      if (prepare.includes(MARKERS.prepareRenameUnsupported)) {
         observe(`S5 rename prepare: prepareRename not advertised by gopls (recorded)\n${prepare}`);
       } else {
-        expect(prepare).toContain("ready to rename");
+        expect(prepare).toContain(MARKERS.readyToRename);
         observe(`S5 rename prepare:\n${prepare}`);
       }
       const renamePreview = await toolText("lsp_rename", project.mainPath, {
@@ -423,7 +451,7 @@ describe.skipIf(!process.env.GOPLS_SMOKE)("layer-1 real gopls smoke", () => {
         newName: "salutation",
       });
       expect(renamePreview).toContain("salutation");
-      expect(renamePreview).not.toContain("failed to retrieve rename edit");
+      expect(renamePreview).not.toContain(MARKERS.failedToRetrieveRenameEdit);
       observe(`S5 rename preview:\n${renamePreview}`);
 
       const mainAfter = await readFile(project.mainPath, "utf8");

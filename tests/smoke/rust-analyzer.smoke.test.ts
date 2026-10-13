@@ -18,8 +18,7 @@ import {
 } from "./rust-analyzer-smoke-fixture.js";
 
 const execFileAsync = promisify(execFile);
-const RUST_ANALYZER_BIN =
-  process.env.RUST_ANALYZER_BIN ?? "/home/metalbolicx/.cargo/bin/rust-analyzer";
+const RUST_ANALYZER_BIN = process.env.RUST_ANALYZER_BIN ?? "rust-analyzer";
 const CARGO_BIN = process.env.CARGO_BIN ?? "cargo";
 const RUSTC_BIN = process.env.RUSTC_BIN ?? "rustc";
 const SERVER_ID = "rust-analyzer";
