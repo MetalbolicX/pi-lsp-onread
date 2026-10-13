@@ -73,15 +73,22 @@ pnpm test
 pnpm lint && pnpm typecheck
 ```
 
-Layer-1 real-server smoke for gopls is gated and never runs under bare `pnpm test`:
+Layer-1 real-server smokes are gated per server and never run under bare `pnpm test`:
 
 ```sh
-pnpm smoke:gopls   # GOPLS_SMOKE=1 vitest run tests/smoke
+pnpm smoke:gopls          # GOPLS_SMOKE=1 vitest run tests/smoke
+pnpm smoke:rust-analyzer  # RUST_ANALYZER_SMOKE=1 vitest run tests/smoke
 ```
 
-It needs a locally installed `gopls` and Go toolchain (override with `GOPLS_BIN`/`GO_BIN`),
-spawns your gopls against a stdlib-only temp fixture, and writes only normal user-level
-gopls caches.
+Each smoke needs its locally installed toolchain and **spawns your real server** against an
+isolated temp fixture, writing only normal user-level caches (`gopls` for Go, `cargo`/`rustc`
+for Rust):
+
+- `pnpm smoke:gopls` needs `gopls` plus a Go toolchain (override with `GOPLS_BIN`/`GO_BIN`).
+- `pnpm smoke:rust-analyzer` needs `rust-analyzer` plus `cargo`/`rustc` (override the server
+  with `RUST_ANALYZER_BIN`). Its fixture declares no dependencies, so `cargo check` is offline-safe.
+
+Bare `pnpm test` skips both suites because their env gates are unset.
 
 Try the extension locally:
 
