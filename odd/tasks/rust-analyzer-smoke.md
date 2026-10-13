@@ -51,7 +51,7 @@ changes; CI wiring.
 | --- | --- | --- | --- |
 | [x] T1 Author gated rust-analyzer smoke (fixture + suite) | S1–S8 | worker + parent | C1 |
 | [x] T2 Parent re-run: unit battery + gated smoke both servers | S1–S8 | parent | — |
-| [ ] T3 Closure, commits, assess | all | parent | C2+ |
+| [x] T3 Closure, commits, assess | all | parent | `d015b1c`, `7154325` |
 
 ## Log
 
@@ -112,4 +112,10 @@ changes; CI wiring.
 
 ## Review record
 
-- (pending)
+- Post-implementation assess (committed range, base `7c2b868fa6…`):
+  **medium risk** (`configuration_change`: package.json), 5 paths / 893
+  lines, **reviewDue: false (`under_budget`)** — no native review started
+  per entry rule; writer self-verification stands (worker authored + parent
+  independently reran: bare 494/49+skip, lint/tsc/format green, both gated
+  smokes 8/8 on final content). If a later reminder claims the target, the
+  tight base above applies.
