@@ -106,3 +106,18 @@ product-code changes; installing anything.
   (needs explicit base-ref for committed work); a second call used a
   wrong hand-typed SHA (rejected by git) before the correct full SHA
   `60e195178d6a…` produced the verdict above — recorded for honesty.
+- RDD reminder (target `sha256:01cf0298…`) later required a native
+  review: slice review **APPROVED** — lineage `review-c037f0ec5fd88797`,
+  medium (`configuration_change`), `review-reliability` lens, 5 paths /
+  895 lines, correction budget 200, tight base `60e195178d6a…`
+  (committedOnly; the default origin-wide base would re-litigate the
+  user-accepted Biome disposition and exceed budget). Reviewer forecast
+  (1 host-relay run) acknowledged; approved on the last admitted event
+  with **one informational advisory**: R3-001 `reliability` WARNING at
+  `tests/smoke/gopls.smoke.test.ts:376-425` (S5 preview block —
+  substring/negative-guard assertions and regex action-index extraction
+  are wording-brittle; separate later work per receipt). Acknowledgement
+  burned (consumed revision `sha256:13b16da2…`). One transcription typo
+  in a capture binding (`capture-binding-rejected`) was resolved by the
+  fresh-STATUS + verbatim-resubmit remedy. Delivery: ordinary repository
+  policy.
