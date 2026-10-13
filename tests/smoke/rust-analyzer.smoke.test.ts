@@ -24,9 +24,14 @@ const RUSTC_BIN = process.env.RUSTC_BIN ?? "rustc";
 const SERVER_ID = "rust-analyzer";
 const REQUEST_TIMEOUT_MS = 20_000;
 const TEST_TIMEOUT = 180_000;
+// Probe-verified against rust-analyzer 1.95 (hardening-ledger slice, 2026-10-13): the previous
+// `checkOnSave: { command: "check" }` shape is rejected verbatim ("invalid config value:
+// /checkOnSave: invalid type: map, expected a boolean") — flycheck only ran on defaults. The
+// modern key is `check`. `lens.enable` is included for shape correctness; codeLens stays
+// server-side empty (F5) under every settings shape.
 const RUST_ANALYZER_SETTINGS = {
-  checkOnSave: { command: "check" },
-  lens: { run: { enable: true }, debug: { enable: true } },
+  check: { command: "check" },
+  lens: { enable: true, run: { enable: true }, debug: { enable: true } },
 };
 
 type Tool = {

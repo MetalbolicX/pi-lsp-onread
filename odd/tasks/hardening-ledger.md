@@ -63,8 +63,8 @@ rust-analyzer-smoke.md` (L4 F5, review record R3-001),
 |---|------|-------|--------------|--------|
 | T0 | Advisory-tail audit: classify seed list, fix trivially-live items | inline (reads) + worker if fixes span files | fixed/stale/live table below; unit green | **done** — docs-only; no live item met the RED→GREEN bar (table below) |
 | T1 | Smoke hygiene: PATH-default bins (both tests), gopls S5 shared-marker assertions | worker | both gated smokes 8/8; bare test spawns nothing | todo |
-| T2 | F9 store merge + F8 context verification (one coherent product commit; shared store/session/fixture surfaces) | worker (RED→GREEN) | unit: interleaved two-source pushes preserve both; rust smoke S3 delta always-assertable (auto-tighten) or F9 honestly stays recorded; S5 flip on RA asserted; gopls 8/8 | todo |
-| T3 | F5 probe + disposition | inline (probe) + docs | probe evidence verbatim in Log; client-side fix or documented server-side finding | todo |
+| T2 | F9 store merge + F8 context verification (one coherent product commit; shared store/session/fixture surfaces) | worker (RED→GREEN) | unit: interleaved two-source pushes preserve both; rust smoke S3 delta always-assertable (auto-tighten) or F9 honestly stays recorded; S5 flip on RA asserted; gopls 8/8 | **done — honesty gate fired**: probe found no stable discriminant (native pushes are empty; items all `source:"rustc"`); no store change made; harness settings-shape fix landed instead; rust smoke 8/8 |
+| T3 | F5 probe + disposition | inline (probe) + docs | probe evidence verbatim in Log; client-side fix or documented server-side finding | **done — server-side confirmed**: 0 lenses under valid settings through the real stack, both unwrapped (our section-content contract) and wrapped shapes; `codeLensProvider:{resolveProvider:true}` advertised; settings shape ruled out as the cause |
 | T4 | Closure: full battery, README wording where behavior text changed, assess + review per RDD | inline + native | all green; slice review burned | todo |
 
 ## Audit seed list (from receipts; line numbers historical)
@@ -114,6 +114,50 @@ budget; code-action index stability) — neither admits a
 deterministic RED→GREEN fix. The active ledger after this audit is
 exactly F5 / F8 / F9 + the two smoke advisories (T1–T3).
 
+## Probe evidence and dispositions (T2/T3)
+
+Instruments: (1) a standalone framed-LSP probe replicating the exact
+client handshake (auto `-32601` for unhandled server requests, matching
+the real protocol connection), and (2) a temporary env-gated harness
+test running the REAL stack (RuntimeSession + real rust-analyzer +
+real fixture) with store-transition polling and raw client requests —
+deleted after evidence capture. Verbatim key lines:
+
+- `P1-open +1204ms :: v=1 origin=push items=[rustc:E0425:s1:cannot
+  find function \`undefined_helper\` …] rawSources=[rustc]` — the
+  flycheck stream pushes items with `source:"rustc"`.
+- `P2-edit +0ms :: v=2 origin=push items=[] rawSources=[]` followed by
+  `P2-edit +199ms :: v=2 origin=push items=[rustc:E0432:…]` — the
+  interleaving is real: an EMPTY push (the native stream's clear)
+  lands between flycheck pushes of the same version.
+- `P4 context pool: total=3 native=0 flycheck=3` and all four context
+  variants (`empty`/`all`/`native-only`/`flycheck-only`) →
+  `result=null` — **F8 disposition: server-side.** rust-analyzer
+  offers no actions at flycheck-error positions regardless of context;
+  no product change can fix this.
+- `P3 [F5] valid-unwrapped: 0 lenses` and `P5 [F5] wrapped: 0 lenses`
+  with `codeLensProvider={"resolveProvider":true}` — **F5
+  disposition: server-side.** Zero lenses under correct settings
+  through both configuration shapes; the settings shape is ruled out.
+- Standalone probe: `showMessage[2] invalid config value:
+  /checkOnSave: invalid type: map, expected a boolean` (×3) — the
+  smoke's `checkOnSave: { command: "check" }` shape has been silently
+  rejected by rust-analyzer 1.95 all along (flycheck ran on
+  defaults). Fixed in the harness: modern `check: { command: "check" }`
+  + `lens.enable: true`; rust smoke 8/8 after the fix.
+
+**F9 disposition: stays a recorded finding.** The planned merge-by-
+`source` has no stable discriminant: every pushed ITEM carries
+`source:"rustc"` (flycheck), while the native stream's pushes are
+EMPTY (no items, no source key) — an empty push cannot be attributed
+to a stream, so slot-merging would preserve stale flycheck items
+after a genuine clear (false positives worse than the timing artifact
+being fixed). The harm is also transient and self-healing (~200 ms–2 s
+convergence, already asserted honestly by the S3 dual-form contract).
+No speculative store change was made — exactly the plan's honesty
+c gate. The store's finding-fixes semantics (pull-preserves-push,
+version monotonicity) are untouched.
+
 ## Verification commands
 
 - `pnpm test` (bare — both smokes skip, no servers spawn)
@@ -141,6 +185,16 @@ rust-analyzer-side behavior for F5; merging this slice (user decides).
   RED→GREEN bar, so T0 stayed docs-only (no speculative "fixes").
   Reviewer prose was not preserved for most historical items, so
   classification is by pattern family against current source.
+- L3 (T2/T3 probe dispositions): two instruments (replicated-protocol
+  standalone probe + temporary real-stack harness test, both deleted
+  after capture). All three findings land server-side or stay
+  recorded: F8 `result=null` for every context variant; F5 zero
+  lenses under valid settings in both shapes; F9 no stable
+  discriminant (empty native pushes; items all `rustc`) → honesty
+  gate fires, no store merge. Bonus harness fix: the smoke's
+  `checkOnSave` map shape was silently rejected by RA 1.95 —
+  corrected to `check` (+ `lens.enable`); rust smoke 8/8 after.
+  No product (src/) change in this slice.
 
 ## Review record
 
