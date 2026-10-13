@@ -57,7 +57,7 @@ F5; merge (user decides); layer-2 smoke; push.
 | --- | --- | --- | --- |
 | [x] T1 RED→GREEN F3+F4+F6 (+fixture strictness, +unit tests, README) — extended in-slice with F7 | F3, F4, F6, F7 | worker + parent | `36410c3` |
 | [x] T2 Parent spot-check + battery + BOTH gated smokes (flip check) | all | parent | — |
-| [ ] T3 Commits, closure, assess | all | parent | C2+ |
+| [x] T3 Commits, closure, assess | all | parent | `36410c3`, `f1c26fd` |
 
 ## Log
 
@@ -119,4 +119,11 @@ F5; merge (user decides); layer-2 smoke; push.
 
 ## Review record
 
-- (pending)
+- Post-implementation assess (committed range, base `a6e29aa8af8…`):
+  **medium risk** (`executable_change`: src/diagnostics/store.ts), 18
+  paths / 546 lines, **reviewDue: false (`under_budget`)** — no native
+  review started per entry rule; writer self-verification stands
+  (worker RED→GREEN both passes + parent spot-check + independent final
+  battery: bare 506/49+skip, lint/tsc/format green, gopls 8/8,
+  rust-analyzer 8/8 with the flip outcomes recorded in L5). If a later
+  reminder claims the target, the tight base above applies.
