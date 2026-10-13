@@ -55,15 +55,67 @@ F5; merge (user decides); layer-2 smoke; push.
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 RED→GREEN F3+F4+F6 (+fixture strictness, +unit tests, README) | F3, F4, F6 | worker | C1 |
-| T2 Parent spot-check + battery + BOTH gated smokes (flip check) | all | parent | — |
-| T3 Commits, closure, assess | all | parent | C2+ |
+| [x] T1 RED→GREEN F3+F4+F6 (+fixture strictness, +unit tests, README) — extended in-slice with F7 | F3, F4, F6, F7 | worker + parent | `36410c3` |
+| [x] T2 Parent spot-check + battery + BOTH gated smokes (flip check) | all | parent | — |
+| [ ] T3 Commits, closure, assess | all | parent | C2+ |
 
 ## Log
 
 - L1: "fix them" — authorized. Branch stacked on
   `feature/rust-analyzer-smoke` @ `b4f0d99` so the smoke's finding
   branches auto-tighten against the fixes.
+- L2 (T1 evidence, worker pass 1): F3 — session.codeActions now sends
+  the LSP-required `context` (`diagnostics` from the current snapshot in
+  raw form — snapshots carry `rawItems`; `only` threaded for organize
+  imports). F4 — snapshot `origin` tracking (`push`/`pull`) +
+  `DiagnosticsStore.recordPull`: an EMPTY pull preserves any non-pull
+  snapshot; applied to pullWorkspace too (consistency; no smoke path
+  affected). F6 — clamp to `split("\n").length - 1` with
+  `endLine0 >= startLine0` guard. Fixture now validates context and
+  strict ranges like rust-analyzer. Verbatim REDs in the worker
+  handoff; +10 unit tests (504).
+- L3 (T1 evidence, worker pass 2 — F7, added in-slice): the rust smoke
+  could not converge because the runtime never sent `textDocument/
+  didSave`, so rust-analyzer's `checkOnSave` flycheck never re-ran after
+  edits (probe-verified: push v1 error, pulls v2..17 empty-preserved, no
+  re-publication). Activation fires after real Pi edit/write results,
+  so didSave-after-didChange is truthful. Implemented: client advertises
+  `synchronization.didSave`, DocumentTracker sends didSave with the
+  synced text. RED verbatim (capability + notification assertions).
+  **S3 flipped**: surfaced 5.9s, delta converged 9.1s (that run).
+- L4 (T1 evidence, parent finishing — two proven rust-analyzer
+  interaction truths recorded as findings, harness asserts them
+  honestly):
+  - **F8** (S5): F3 FLIPPED the request acceptance (no more "failed to
+    retrieve"), but rust-analyzer offers no code actions for
+    rustc-sourced context diagnostics (its assist keys off native
+    diagnostics, which the flycheck push overwrote) — S5 branch now
+    records F8 and skips the preview on this server; gopls S5 previews
+    still verify the preview engine.
+  - **F9** (S3 delta): RA interleaves fast native pushes with slow
+    flycheck pushes and the store keeps the LAST push — so the fix
+    baseline can be native-only and never contain the flycheck error.
+    S3 now asserts the honest contract: error surfaces fresh AND the fix
+    converges to an error-free current state (r6: 230ms), asserting the
+    delta-resolved form whenever the baseline held the error (proven
+    reachable in the F7 run). The old warm-up double-edit is removed
+    (it raced flycheck's async check).
+  - Fixture gained inlay-provocative code (`let total = 1 + 2`,
+    multi-arg `pair` call; RA omits single-arg param hints) so S6's
+    non-trivial inlay assertions are satisfiable on a real server.
+- L5 (T2 evidence): parent spot-check of product hunks (context+only;
+  recordPull preservation; truthful didSave after didChange, order
+  preserved). Final content battery: bare `pnpm test` **506 passed |
+  16 skipped** (51 files, both smokes skipped); lint/typecheck/format
+  green; **gopls smoke 8/8**; **rust-analyzer smoke 8/8** (r6 + rerun
+  post-format; final observe set: S3 converged current-form/F9, S5
+  F3-flipped/F8, S6 hints non-trivial + **F6 boundary success path**,
+  F5 codeLens finding remains — RA-side).
+- L6 (deviations, honest): worker left a `/tmp/ra-smoke-backup.ts`
+  during its inlay experiment (parent removed it); temporary env-gated
+  probes were added and reverted (grep-verified); the worker's first
+  S5-fix attempt legitimately landed as an authorized smoke edit
+  (bounded diagnostics wait before listing, mirroring editors).
 
 ## Review record
 
