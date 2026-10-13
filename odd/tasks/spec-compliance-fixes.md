@@ -45,7 +45,7 @@ unaffected); behavior changes beyond spec compliance; push.
 | --- | --- | --- | --- |
 | [x] T1 RED→GREEN both fixes + fixture re-shape + smoke expectation sync | F1, F2 | worker (sequential; shared fixture) | `88f0c29` |
 | [x] T2 Parent spot-check + battery + gated smoke rerun | F1, F2 | parent | — |
-| [ ] T3 Commits, closure, assess/review, record | all | parent | C3+ |
+| [x] T3 Commits, closure, assess/review, record | all | parent | `32f84b0` |
 
 ## Log
 
@@ -80,4 +80,14 @@ unaffected); behavior changes beyond spec compliance; push.
 
 ## Review record
 
-- (pending)
+- Post-implementation assess (committed range, base `46800348f0…`):
+  **medium risk** (`executable_change`: src/pi/lsp-inlay-hints-tool.ts),
+  8 paths / 324 lines, **reviewDue: false (`under_budget`)** — no native
+  review started per entry rule; writer self-verification stands (worker
+  GREEN + parent independent reruns: unit 494/49+skip, lint, typecheck,
+  gated smoke 8/8 vs real gopls). If a later reminder claims the target,
+  the tight base above applies.
+- Assess first failed on the recurring `package-local-binary-missing`
+  incident; repaired via the recorded playbook
+  (`node scripts/install-gentle-ai.mjs`, integrity re-verified) and the
+  retry produced the verdict above.
