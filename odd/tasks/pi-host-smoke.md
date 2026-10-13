@@ -147,3 +147,14 @@ slice (finding-fixes pattern), not silently inside this one.
   lint/tsc/format clean, zero orphan servers). No native review started
   per entry rule; if a later reminder claims this target, the tight
   base above applies.
+- RDD reminder (target `sha256:c5b706e9…`) later claimed the slice:
+  **APPROVED** — lineage `review-e7a90f5b816e346f`, medium
+  (`configuration_change`: package.json), lenses `review-resilience` +
+  `review-reliability`, 5 paths / 687 lines, correction budget 200,
+  tight base `c79d1003e4…` (committedOnly). Reviewer group forecast
+  (2 host-relay runs) acknowledged; approved on the last admitted
+  event; acknowledgement burned (consumed revision `sha256:f50cec5f…`).
+  One NON-BLOCKING informational advisory: R3-001 `reliability`
+  WARNING at `tests/smoke/pi-host.smoke.test.ts:372` — separate later
+  work per its receipt; does not reopen this review. Delivery: ordinary
+  repository policy.
