@@ -64,7 +64,7 @@ real CLI**, branch **stacked on `feature/hardening-ledger` @ `c79d100`**
 
 | # | Work | Route | Verification | Status |
 |---|------|-------|--------------|--------|
-| T1 | Spike: scripted-model interface on SDK 1.1.0 — one scripted tool call through a real session (temp agentDir, in-memory manager) | inline (`/tmp` probe) | scripted call executes a registered tool; Model shape documented in Log | todo |
+| T1 | Spike: scripted-model interface on SDK 1.1.0 — one scripted tool call through a real session (temp agentDir, in-memory manager) | inline (`/tmp` probe) | scripted call executes a registered tool; Model shape documented in Log | **done** — run 9 SPIKE-OK (9 runs; recipe in L2) |
 | T2 | Harness: `tests/smoke/pi-host.smoke.test.ts` + fixture + `smoke:pi-host` script; env-gated, isolated HOME/agentDir | worker | bare `pnpm test` skips it; `smoke:pi-host` reaches S1 | todo |
 | T3 | Scenarios S1–S5 wired and green; layer-1 smokes unaffected | worker (sequential — same files as T2) | `smoke:pi-host` 5/5; gopls 8/8; rust 8/8; bare suite unchanged | todo |
 | T4 | Closure: full battery, README (`smoke:pi-host` mention), assess + review per RDD | inline + native | all green; slice review burned | todo |
@@ -87,13 +87,29 @@ slice (finding-fixes pattern), not silently inside this one.
 
 ## Log
 
-- L1 (plan): scope settled with user — lean 5 scenarios, real-CLI
-  config authorship, stacked on `feature/hardening-ledger` @ `c79d100`.
-  SDK 1.1.0 capability verified in-repo (createAgentSession,
-  DefaultResourceLoader + `additionalExtensionPaths`, getAgentDir,
-  SessionManager.inMemory all present in the installed typings). The
-  scripted-Model interface is the one open unknown → T1 spike with a
-  ModelRuntime fallback.
+- L2 (T1 spike, 9 runs, final SPIKE-OK): the scripted no-network session
+  recipe on SDK 1.1.0 —
+  1. `DefaultResourceLoader({ cwd, agentDir: <temp>, extensionFactories,
+     additionalExtensionPaths: [<abs dist/extension.js>] })`;
+  2. `await resourceLoader.reload()` BEFORE session creation (extension
+     factories load and their tools register only on an explicit reload);
+  3. own the model path: `ModelRuntime.create({ authPath, modelsPath }`
+     under temp) + `modelRuntime.registerProvider("scripted", { apiKey:
+     "$PI_HOST_SMOKE_KEY", api: "pi-host-smoke", models: [{ … baseUrl
+     required … }], streamSimple })` — a STANDALONE loader can never route
+     `registerProvider` into the session's runtime (runs 2–5), and the
+     session's pre-flight (`hasConfiguredAuth`) passes only via this owned-
+     runtime legacy registration with an env-interpolated apiKey;
+  4. `createAgentSession({ resourceLoader, sessionManager:
+     SessionManager.inMemory(), model, modelRuntime })` then
+     `await session.bindExtensions({})` (session_start lifecycle);
+  5. the scripted `streamSimple` pushes `AssistantMessageEvent`s
+     synchronously (start → toolcall_* → done(toolUse), then start →
+     text_* → done(stop)); credential shape `{ type: "api_key" }`.
+  Validation gates learned: provider-level `api` and model-level
+  `baseUrl` are required for custom models. Evidence:
+  `SPIKE RESULT: requests=2 finalText="SPIKE-DONE"
+  marker="hit at …"` → SPIKE-OK.
 
 ## Review record
 
