@@ -39,6 +39,7 @@
     "test": "vitest run",
     "smoke:gopls": "GOPLS_SMOKE=1 vitest run tests/smoke",
     "smoke:rust-analyzer": "RUST_ANALYZER_SMOKE=1 vitest run tests/smoke",
+    "smoke:pi-host": "pnpm build && PI_HOST_SMOKE=1 vitest run tests/smoke/pi-host.smoke.test.ts",
     "test:watch": "vitest",
     "prepublishOnly": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build"
   },
