@@ -119,3 +119,14 @@ changes; CI wiring.
   independently reran: bare 494/49+skip, lint/tsc/format green, both gated
   smokes 8/8 on final content). If a later reminder claims the target, the
   tight base above applies.
+- RDD reminder (target `sha256:1ea4694f…`) later claimed the slice:
+  **APPROVED** — lineage `review-4979632c9dd3a00d`, medium
+  (`configuration_change`), `review-reliability` lens, 5 paths / 901 lines,
+  correction budget 200, tight base `7c2b868fa6…` (committedOnly).
+  Reviewer forecast (1 host-relay run) acknowledged; approved on the last
+  admitted event with one informational advisory: R3-001 `reliability`
+  WARNING at `tests/smoke/rust-analyzer.smoke.test.ts:23` (the hardcoded
+  user-specific default `RUST_ANALYZER_BIN` path — separate later work per
+  receipt; same informational class as the gopls smoke's R3-001).
+  Acknowledgement burned (consumed revision `sha256:c0d7306f…`). Delivery:
+  ordinary repository policy.
