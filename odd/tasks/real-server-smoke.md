@@ -95,4 +95,14 @@ product-code changes; installing anything.
 
 ## Review record
 
-- (pending)
+- Post-implementation assess (committed range, base `60e195178d6aade4ebdd3d318bb99556bcd29e22`):
+  **medium risk** (`configuration_change`: package.json), 5 paths / 885
+  lines, **reviewDue: false (`under_budget`)** — no native review started
+  per entry rule (RDD line on; writer self-verification stands; no
+  separate verifier required at medium). Writer self-verification =
+  worker's gated run + parent independent rerun (bare `pnpm test` 489/49
+  with smoke skipped; `GOPLS_SMOKE=1` smoke 8/8; lint/typecheck clean).
+- First assess call against the clean worktree returned `unassessable`
+  (needs explicit base-ref for committed work); a second call used a
+  wrong hand-typed SHA (rejected by git) before the correct full SHA
+  `60e195178d6a…` produced the verdict above — recorded for honesty.
