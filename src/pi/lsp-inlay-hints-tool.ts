@@ -66,17 +66,19 @@ async function runInlayHints(
 
     // LSP ranges are 0-based with an exclusive end, so the 1-based inclusive
     // [startLine, endLine] window covers [startLine - 1, endLine). Clamp both 0-based lines to
-    // the document's line count (the exclusive end-of-file line) so spec-strict servers such
-    // as gopls accept the default 200-line window on short files instead of rejecting it.
+    // the LSP-legal EOF line — split("\n").length - 1, valid for files with and without a
+    // trailing newline — so strict servers such as rust-analyzer accept the default 200-line
+    // window on short files instead of rejecting a one-past line (gopls tolerated it).
     let startLine0 = startLine - 1;
     let endLine0 = endLine;
     try {
-      const lineCount = (await session.fsReadFile(absolutePath, "utf8")).split("\n").length;
-      startLine0 = Math.min(startLine0, lineCount);
-      endLine0 = Math.min(endLine0, lineCount);
+      const lastLine0 = (await session.fsReadFile(absolutePath, "utf8")).split("\n").length - 1;
+      startLine0 = Math.min(startLine0, lastLine0);
+      endLine0 = Math.min(endLine0, lastLine0);
     } catch {
       /* Unreadable document: send the requested window unchanged. */
     }
+    if (endLine0 < startLine0) endLine0 = startLine0;
 
     const uri = pathToFileURL(absolutePath).href;
     const failures: string[] = [];

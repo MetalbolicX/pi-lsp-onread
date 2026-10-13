@@ -35,6 +35,13 @@ export class DocumentTracker {
       textDocument: { uri, version: document.version },
       contentChanges: [{ text }],
     });
+    // The runtime only syncs on a Pi edit/write result, when the file is genuinely saved on disk,
+    // so a didSave immediately after the full-text didChange is truthful. Servers that run checks
+    // on save (rust-analyzer's checkOnSave flycheck) need it to re-publish diagnostics.
+    await this.sync.sendNotification("textDocument/didSave", {
+      textDocument: { uri },
+      text,
+    });
   }
 
   async close(uri: string): Promise<void> {

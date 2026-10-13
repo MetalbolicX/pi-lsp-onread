@@ -219,6 +219,43 @@ describe("LSP client", () => {
   );
 
   it(
+    "advertises didSave synchronization capability",
+    async () => {
+      const client = await createClient();
+      expect((await client.ensure()).ok).toBe(true);
+      const capabilities = await client.request<Record<string, unknown>>(
+        "custom/initializeCapabilities",
+      );
+      expect(capabilities.ok).toBe(true);
+      if (!capabilities.ok) throw new Error("expected an initialize-capabilities response");
+      expect(capabilities.value).toMatchObject({
+        textDocument: { synchronization: { didSave: true } },
+      });
+    },
+    timeout,
+  );
+
+  it(
+    "sends didSave immediately after a full-text didChange with the synced text",
+    async () => {
+      const client = await createClient();
+      expect((await client.ensure()).ok).toBe(true);
+      await client.documents.open("file:///workspace/project/a.ts", "typescript", "clean");
+      await client.documents.change("file:///workspace/project/a.ts", "error: updated");
+      const log = await client.request<unknown[]>("custom/didSaveLog");
+      expect(log.ok).toBe(true);
+      if (!log.ok) throw new Error("expected a didSave log response");
+      expect(log.value).toEqual([
+        {
+          textDocument: { uri: "file:///workspace/project/a.ts" },
+          text: "error: updated",
+        },
+      ]);
+    },
+    timeout,
+  );
+
+  it(
     "times out initialize, disposes the child, and clears the cached failure",
     async () => {
       const client = await createClient(

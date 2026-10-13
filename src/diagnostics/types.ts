@@ -21,8 +21,18 @@ export interface Snapshot {
   uri: string;
   version: number | null;
   items: DiagnosticItem[];
+  /**
+   * Raw LSP `Diagnostic` values as the server produced them. Servers match quickfixes by
+   * `context.diagnostics` identity/range (rust-analyzer) and simplified items drop fields, so
+   * the raw form is retained for `textDocument/codeAction` context.
+   */
+  rawItems?: readonly unknown[];
+  /** Which path recorded this snapshot: server push or client pull. */
+  origin?: SnapshotOrigin;
   receivedAt: number;
 }
+
+export type SnapshotOrigin = "push" | "pull";
 
 export type Freshness = "current" | "stale" | "unknown";
 

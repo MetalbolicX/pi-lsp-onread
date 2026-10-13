@@ -121,4 +121,40 @@ describe("diagnostics store", () => {
     expect(freshnessOf(snapshot(3, ""), 4)).toBe("stale");
     expect(freshnessOf(snapshot(null, ""), 4)).toBe("unknown");
   });
+
+  it("records a non-empty pull over a push snapshot with pull origin", () => {
+    const store = new DiagnosticsStore();
+    const pushed = { ...snapshot(1, "pushed"), origin: "push" as const };
+    store.record(pushed);
+
+    expect(store.recordPull(snapshot(1, "pulled"))).toBe("recorded");
+    expect(store.get("ts", "file:///a.ts")?.origin).toBe("pull");
+    expect(store.get("ts", "file:///a.ts")?.items[0]?.message).toBe("pulled");
+  });
+
+  it("preserves a push snapshot when an empty pull report arrives", () => {
+    const store = new DiagnosticsStore();
+    const pushed = { ...snapshot(1, "pushed"), origin: "push" as const };
+    store.record(pushed);
+
+    expect(store.recordPull({ ...snapshot(1, ""), items: [] })).toBe("preserved");
+    expect(store.get("ts", "file:///a.ts")).toBe(pushed);
+    expect(store.baseline("ts", "file:///a.ts")).toBeUndefined();
+  });
+
+  it("replaces a pull snapshot when an empty pull report arrives", () => {
+    const store = new DiagnosticsStore();
+    store.recordPull(snapshot(1, "first pull"));
+
+    expect(store.recordPull({ ...snapshot(1, ""), items: [] })).toBe("recorded");
+    expect(store.get("ts", "file:///a.ts")?.items).toEqual([]);
+  });
+
+  it("records the first empty pull when no snapshot exists yet", () => {
+    const store = new DiagnosticsStore();
+
+    expect(store.recordPull({ ...snapshot(1, ""), items: [] })).toBe("recorded");
+    expect(store.has("ts", "file:///a.ts")).toBe(true);
+    expect(store.get("ts", "file:///a.ts")?.origin).toBe("pull");
+  });
 });

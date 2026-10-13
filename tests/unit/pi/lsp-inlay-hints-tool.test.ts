@@ -101,7 +101,7 @@ describe("lsp_inlay_hints", () => {
       "fake",
       expect.any(String),
       0,
-      2,
+      1,
       5000,
       expect.anything(),
     );
@@ -178,35 +178,51 @@ describe("lsp_inlay_hints", () => {
       "L2:C1   -> result",
     ]);
   });
-  it("converts the default window to a 0-based exclusive range clamped to the document length", async () => {
+  it("converts the default window to a 0-based exclusive range clamped to the LSP-legal EOF line", async () => {
     const { filePath, projectRoot, session, tool } = await setup({ echoInlayRange: true });
     await writeFile(filePath, "first line\nsecond line\nthird line\n");
     const request = vi.spyOn(session, "inlayHints");
     const output = await execute(tool, filePath, projectRoot);
     expect(output).not.toContain("failed to retrieve");
-    expect(output).toContain("range 0-4");
+    expect(output).toContain("range 0-3");
     expect(output).toContain("L1:C6  [type] string");
     expect(request).toHaveBeenLastCalledWith(
       "fake",
       expect.any(String),
       0,
-      4,
+      3,
       5000,
       expect.anything(),
     );
   });
-  it("clamps an explicit endLine past the document to the document length", async () => {
+  it("clamps an explicit endLine past the document to the LSP-legal EOF line", async () => {
     const { filePath, projectRoot, session, tool } = await setup({ echoInlayRange: true });
     await writeFile(filePath, "first line\nsecond line\nthird line\n");
     const request = vi.spyOn(session, "inlayHints");
     const output = await execute(tool, filePath, projectRoot, 2, 40);
     expect(output).not.toContain("failed to retrieve");
-    expect(output).toContain("range 1-4");
+    expect(output).toContain("range 1-3");
     expect(request).toHaveBeenLastCalledWith(
       "fake",
       expect.any(String),
       1,
-      4,
+      3,
+      5000,
+      expect.anything(),
+    );
+  });
+  it("clamps to the last line for a file without a trailing newline", async () => {
+    const { filePath, projectRoot, session, tool } = await setup({ echoInlayRange: true });
+    await writeFile(filePath, "first line\nsecond line");
+    const request = vi.spyOn(session, "inlayHints");
+    const output = await execute(tool, filePath, projectRoot);
+    expect(output).not.toContain("failed to retrieve");
+    expect(output).toContain("range 0-1");
+    expect(request).toHaveBeenLastCalledWith(
+      "fake",
+      expect.any(String),
+      0,
+      1,
       5000,
       expect.anything(),
     );

@@ -211,7 +211,7 @@ export class LspClient {
         rootUri: this.options.rootUri,
         capabilities: {
           textDocument: {
-            synchronization: { dynamicRegistration: false, willSave: false, didSave: false },
+            synchronization: { dynamicRegistration: false, willSave: false, didSave: true },
             diagnostic: {},
           },
           general: { positionEncodings: ["utf-16"] },

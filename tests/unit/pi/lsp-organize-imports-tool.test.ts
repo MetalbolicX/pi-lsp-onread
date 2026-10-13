@@ -120,6 +120,20 @@ describe("LSP organize imports tool", () => {
     );
   });
 
+  it("requests only the organize-imports kind from each server", async () => {
+    const { filePath, projectRoot, session, tool } = await setup({ codeActions: true });
+    const request = vi.spyOn(session, "codeActions");
+    await execute(tool, filePath, projectRoot);
+    expect(request).toHaveBeenCalledWith(
+      "fake",
+      expect.any(String),
+      { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      expect.any(Number),
+      expect.anything(),
+      ["source.organizeImports"],
+    );
+  });
+
   it("reports when a server has no organize-imports action", async () => {
     const { filePath, projectRoot, session, tool } = await setup({ codeActions: true });
     vi.spyOn(session, "codeActions").mockResolvedValue({

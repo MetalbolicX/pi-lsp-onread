@@ -76,7 +76,9 @@ async function runOrganizeImports(
         server?.requestTimeoutMs ?? DEFAULT_PULL_TIMEOUT_MS,
         DEFAULT_PULL_TIMEOUT_MS,
       );
-      const response = await session.codeActions(serverId, uri, range, timeoutMs, client);
+      const response = await session.codeActions(serverId, uri, range, timeoutMs, client, [
+        "source.organizeImports",
+      ]);
       if (response.outcome === "failed")
         failures.push(`failed to retrieve code actions from ${serverId}`);
       else if (response.outcome === "unsupported")

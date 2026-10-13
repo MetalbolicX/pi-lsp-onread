@@ -4,6 +4,8 @@ import { stdin, stdout } from "node:process";
 let input = "";
 const documents = new Map();
 const lastResultIds = new Map();
+const didSaveEvents = [];
+let initializeParams;
 const pullDiagnostics = process.env.FAKE_PULL_DIAGNOSTICS === "1";
 const workspaceDiagnostics = process.env.FAKE_WORKSPACE_DIAGNOSTICS === "1";
 const documentSymbols = process.env.FAKE_DOCUMENT_SYMBOLS === "1";
@@ -138,6 +140,7 @@ function handle(message) {
     }
   } else if (message.method === "initialize") {
     if (process.env.FAKE_HANG_INITIALIZE === "1") return;
+    initializeParams = message.params;
     const capabilities = { textDocumentSync: 1 };
     if (process.env.FAKE_POSITION_ENCODING)
       capabilities.positionEncoding = process.env.FAKE_POSITION_ENCODING;
@@ -181,6 +184,8 @@ function handle(message) {
     const [{ text }] = message.params.contentChanges;
     documents.set(uri, { version, text });
     setTimeout(() => publish(uri, version, text), delayMs);
+  } else if (message.method === "textDocument/didSave") {
+    didSaveEvents.push(message.params);
   } else if (message.method === "textDocument/didClose") {
     documents.delete(message.params.textDocument.uri);
     lastResultIds.delete(message.params.textDocument.uri);
@@ -536,13 +541,16 @@ function handle(message) {
     const { start, end } = message.params.range ?? {};
     const document = documents.get(uri);
     if (document && start && end) {
-      // Mirror gopls's protocol.Mapper.PositionOffset validation: a position line may be at
-      // most the document's line count (the exclusive end-of-file line, character 0).
+      // Mirror rust-analyzer's strict protocol position validation: the largest LSP-legal line
+      // is the document's last line (split length - 1), valid for files with and without a
+      // trailing newline. gopls tolerated the one-past line the F1 clamp produced; rust-analyzer
+      // rejects it — the F6 finding ("Invalid offset LineCol { line: 12, col: 0 } (line index
+      // length: 183)").
       const lineCount = document.text.split("\n").length;
       const offender =
-        Number.isInteger(start.line) && start.line > lineCount
+        Number.isInteger(start.line) && start.line > lineCount - 1
           ? start
-          : Number.isInteger(end.line) && end.line > lineCount
+          : Number.isInteger(end.line) && end.line > lineCount - 1
             ? end
             : undefined;
       if (offender) {
@@ -551,19 +559,10 @@ function handle(message) {
           id: message.id,
           error: {
             code: -32602,
-            message: `line number ${offender.line} out of range 0-${lineCount}`,
+            message: `Invalid offset LineCol { line: ${offender.line}, col: ${
+              offender.character ?? 0
+            } } (line index length: ${lineCount})`,
           },
-        });
-        return;
-      }
-      if (
-        (Number.isInteger(start.line) && start.line === lineCount && start.character !== 0) ||
-        (Number.isInteger(end.line) && end.line === lineCount && end.character !== 0)
-      ) {
-        send({
-          jsonrpc: "2.0",
-          id: message.id,
-          error: { code: -32602, message: "column is beyond end of file" },
         });
         return;
       }
@@ -630,7 +629,7 @@ function handle(message) {
     if (message.method === process.env.FAKE_HANG_METHOD) return;
     const { uri } = message.params.textDocument;
     const { text } = documents.get(uri) ?? {};
-    const { range } = message.params;
+    const { range, context } = message.params;
     const { start } = range ?? {};
     if (
       text === undefined ||
@@ -641,6 +640,33 @@ function handle(message) {
       typeof start !== "object"
     ) {
       send({ jsonrpc: "2.0", id: message.id, result: null });
+      return;
+    }
+    // Mirror rust-analyzer's required-parameter validation: textDocument/codeAction rejects a
+    // request without the LSP-required `context` (a `diagnostics` array) outright — the exact
+    // shape of the F3 finding. gopls tolerated the omission.
+    if (
+      !context ||
+      typeof context !== "object" ||
+      Array.isArray(context) ||
+      !Array.isArray(context.diagnostics)
+    ) {
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: { code: -32602, message: "missing required parameter context" },
+      });
+      return;
+    }
+    if (
+      context.only !== undefined &&
+      (!Array.isArray(context.only) || context.only.some((kind) => typeof kind !== "string"))
+    ) {
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: { code: -32602, message: "invalid context.only" },
+      });
       return;
     }
     const { line: requestedLine } = start;
@@ -717,7 +743,22 @@ function handle(message) {
                 data: { uri, line },
               },
             ];
+    const contextEcho =
+      process.env.FAKE_CODE_ACTION_CONTEXT_ECHO === "1"
+        ? [
+            {
+              title: `context echo ${JSON.stringify(context)}`,
+              kind: "quickfix",
+              edit: {
+                changes: {
+                  [uri]: [{ range: { start: point, end: point }, newText: "// context echo\n" }],
+                },
+              },
+            },
+          ]
+        : [];
     const actions = [
+      ...contextEcho,
       {
         title: "Fix thing (quickfix)",
         kind: "quickfix",
@@ -776,6 +817,10 @@ function handle(message) {
           : { uri, kind: "full", resultId, items: diagnosticsFor(text) };
       });
     setTimeout(() => send({ jsonrpc: "2.0", id: message.id, result: { items } }), workspaceDelayMs);
+  } else if (message.method === "custom/didSaveLog") {
+    send({ jsonrpc: "2.0", id: message.id, result: didSaveEvents });
+  } else if (message.method === "custom/initializeCapabilities") {
+    send({ jsonrpc: "2.0", id: message.id, result: initializeParams?.capabilities ?? null });
   } else if (message.method === "exit") {
     process.exit(0);
   } else if (message.id !== undefined) {

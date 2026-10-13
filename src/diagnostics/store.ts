@@ -17,6 +17,22 @@ export class DiagnosticsStore {
     this.snapshots.set(key, snapshot);
   }
 
+  /**
+   * Record a pull-origin snapshot. An EMPTY pull report is authoritative only when there is no
+   * snapshot yet or the latest snapshot is also pull-origin: a server's pull view can omit the
+   * results its push path delivers (rust-analyzer's flycheck diagnostics), so an empty pull must
+   * never erase a push snapshot. Non-empty pulls always record. Returns whether the report was
+   * stored or the existing snapshot was preserved.
+   */
+  recordPull(snapshot: Snapshot): "recorded" | "preserved" {
+    const key = this.key(snapshot.serverId, snapshot.uri);
+    const previous = this.snapshots.get(key);
+    if (snapshot.items.length === 0 && previous !== undefined && previous.origin !== "pull")
+      return "preserved";
+    this.record({ ...snapshot, origin: "pull" });
+    return "recorded";
+  }
+
   get(serverId: string, uri: string): Snapshot | undefined {
     return this.snapshots.get(this.key(serverId, uri));
   }

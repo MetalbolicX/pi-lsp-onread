@@ -263,7 +263,7 @@ export class RuntimeSession {
         if (!Array.isArray(report.items)) continue;
         if (typeof report.resultId === "string")
           this.pullState.set(serverId, report.uri, report.resultId);
-        this.diagnostics.record({
+        this.diagnostics.recordPull({
           serverId,
           uri: report.uri,
           version: client.documents.version(report.uri) ?? null,
@@ -271,6 +271,7 @@ export class RuntimeSession {
           items: report.items
             .map(toDiagnosticItem)
             .filter((item): item is DiagnosticItem => item !== undefined),
+          rawItems: report.items,
         });
       }
       return "applied";
@@ -340,6 +341,7 @@ export class RuntimeSession {
     range: { start: { line: number; character: number }; end: { line: number; character: number } },
     timeoutMs = 10_000,
     suppliedClient?: LspClient,
+    only?: readonly string[],
   ): Promise<{ outcome: "unsupported" | "failed" | "ok"; actions: unknown[] }> {
     try {
       const client = this.matchedClient(serverId, suppliedClient);
@@ -348,7 +350,17 @@ export class RuntimeSession {
       if (timeoutMs <= 0) return { outcome: "failed", actions: [] };
       const response = await client.request<unknown>(
         "textDocument/codeAction",
-        { textDocument: { uri }, range },
+        {
+          textDocument: { uri },
+          range,
+          // `context` is LSP-required; rust-analyzer rejects the request without it. Servers
+          // filter quickfixes by these diagnostics, so send the current cached snapshot in
+          // raw LSP form (identity/range matter).
+          context: {
+            diagnostics: this.rawDiagnostics(serverId, uri),
+            ...(only === undefined ? {} : { only: [...only] }),
+          },
+        },
         timeoutMs,
       );
       if (!response.ok) return { outcome: "failed", actions: [] };
@@ -359,6 +371,20 @@ export class RuntimeSession {
     } catch {
       return { outcome: "failed", actions: [] };
     }
+  }
+
+  /** Current cached diagnostics for a document, in raw LSP form for code-action context. */
+  private rawDiagnostics(serverId: string, uri: string): unknown[] {
+    const snapshot = this.diagnostics.get(serverId, uri);
+    if (!snapshot) return [];
+    if (snapshot.rawItems !== undefined) return [...snapshot.rawItems];
+    return snapshot.items.map((item) => ({
+      range: item.range,
+      severity: item.severity,
+      ...(item.code === undefined ? {} : { code: item.code }),
+      ...(item.source === undefined ? {} : { source: item.source }),
+      message: item.message,
+    }));
   }
 
   async resolveCodeAction(
@@ -1018,7 +1044,7 @@ export class RuntimeSession {
       if (!Array.isArray(report.items)) return "failed";
       if (typeof report.resultId === "string") this.pullState.set(serverId, uri, report.resultId);
       const version = client.documents.version(uri) ?? null;
-      this.diagnostics.record({
+      this.diagnostics.recordPull({
         serverId,
         uri,
         version,
@@ -1026,6 +1052,7 @@ export class RuntimeSession {
         items: report.items
           .map(toDiagnosticItem)
           .filter((item): item is DiagnosticItem => item !== undefined),
+        rawItems: report.items,
       });
       return "full";
     } catch {
@@ -1049,7 +1076,9 @@ export class RuntimeSession {
         serverId: event.serverId,
         uri: event.uri,
         version,
+        origin: "push",
         receivedAt: this.clock(),
+        rawItems: event.diagnostics,
         items: event.diagnostics.map(({ range, severity, code, source, message }) => ({
           range,
           severity: severity ?? 1,

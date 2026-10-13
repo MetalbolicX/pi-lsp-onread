@@ -93,6 +93,48 @@ describe("RuntimeSession", () => {
       await session.dispose();
     }
   });
+
+  it("records an empty pull when no snapshot exists yet", async () => {
+    const { session, client } = await sessionWithPullResponse({ kind: "full", items: [] });
+    try {
+      expect(await session.pullFresh("fake", "file:///test.ts", 1000, client)).toBe("full");
+      expect(session.diagnostics.has("fake", "file:///test.ts")).toBe(true);
+      expect(session.diagnostics.get("fake", "file:///test.ts")?.origin).toBe("pull");
+    } finally {
+      await session.dispose();
+    }
+  });
+
+  it("preserves a push snapshot when an empty pull report arrives", async () => {
+    const { session, client } = await sessionWithPullResponse({
+      kind: "full",
+      resultId: "next",
+      items: [],
+    });
+    const uri = "file:///test.ts";
+    const pushed = {
+      serverId: "fake",
+      uri,
+      version: 7,
+      receivedAt: 1,
+      origin: "push" as const,
+      items: [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+          severity: 1,
+          source: "rustc",
+          message: "cannot find function `undefined_helper`",
+        },
+      ],
+    };
+    session.diagnostics.record(pushed);
+    try {
+      expect(await session.pullFresh("fake", uri, 1000, client)).toBe("full");
+      expect(session.diagnostics.get("fake", uri)).toBe(pushed);
+    } finally {
+      await session.dispose();
+    }
+  });
   it("pulls workspace diagnostics for multiple documents and preserves unchanged snapshots", async () => {
     const { projectRoot, trustStorePath } = await setup();
     const session = await RuntimeSession.create({
@@ -959,7 +1001,58 @@ describe("RuntimeSession", () => {
         );
         expect(getArgs()).toEqual([
           "textDocument/codeAction",
-          { textDocument: { uri: "file:///target.ts" }, range },
+          {
+            textDocument: { uri: "file:///target.ts" },
+            range,
+            context: { diagnostics: [] },
+          },
+          1234,
+        ]);
+      } finally {
+        await session.dispose();
+      }
+    });
+
+    it("sends the current snapshot diagnostics in raw form and threads only", async () => {
+      const { session, client, getArgs } = await setupRequest(actions);
+      const rawItem = {
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+        severity: 1,
+        code: "E0425",
+        source: "rustc",
+        message: "cannot find function `undefined_helper`",
+        tags: [1],
+      };
+      session.diagnostics.record({
+        serverId: "fake",
+        uri: "file:///target.ts",
+        version: 1,
+        receivedAt: 1,
+        origin: "push",
+        items: [
+          {
+            range: rawItem.range,
+            severity: 1,
+            code: "E0425",
+            source: "rustc",
+            message: rawItem.message,
+          },
+        ],
+        rawItems: [rawItem],
+      });
+      try {
+        expect(
+          await session.codeActions("fake", "file:///target.ts", range, 1234, client, [
+            "source.organizeImports",
+          ]),
+        ).toEqual({ outcome: "ok", actions });
+        expect(getArgs()).toEqual([
+          "textDocument/codeAction",
+          {
+            textDocument: { uri: "file:///target.ts" },
+            range,
+            context: { diagnostics: [rawItem], only: ["source.organizeImports"] },
+          },
           1234,
         ]);
       } finally {

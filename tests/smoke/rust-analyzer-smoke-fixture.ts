@@ -23,10 +23,12 @@ edition = "2021"
 [dependencies]
 `;
 
-export const brokenMainRs = `use pi_lsp_rust_analyzer_smoke::{callee, greeting};
+export const brokenMainRs = `use pi_lsp_rust_analyzer_smoke::{callee, greeting, pair};
 
 fn main() {
     println!("{}", greeting());
+    let total = 1 + 2;
+    println!("{}", pair("x", "y"));
     println!("{}", callee("world"));
     println!("{}", launch());
     undefined_helper();
@@ -39,10 +41,12 @@ fn launch() -> String {
 
 /** Broken variant used to force a second publication so an edit delta has a baseline. */
 export const warmupMainRs = `// warm-up publication for the edit-delta baseline
-use pi_lsp_rust_analyzer_smoke::{callee, greeting};
+use pi_lsp_rust_analyzer_smoke::{callee, greeting, pair};
 
 fn main() {
     println!("{}", greeting());
+    let total = 1 + 2;
+    println!("{}", pair("x", "y"));
     println!("{}", callee("world"));
     println!("{}", launch());
     undefined_helper();
@@ -54,10 +58,12 @@ fn launch() -> String {
 `;
 
 /** Same as `brokenMainRs` except the undefined identifier is replaced with a real call. */
-export const fixedMainRs = `use pi_lsp_rust_analyzer_smoke::{callee, greeting};
+export const fixedMainRs = `use pi_lsp_rust_analyzer_smoke::{callee, greeting, pair};
 
 fn main() {
     println!("{}", greeting());
+    let total = 1 + 2;
+    println!("{}", pair("x", "y"));
     println!("{}", callee("world"));
     println!("{}", launch());
     println!("{}", callee("again"));
@@ -72,6 +78,10 @@ export const libRs = `use std::collections::HashMap;
 
 pub fn callee(name: &str) -> String {
     name.to_uppercase()
+}
+
+pub fn pair(a: &str, b: &str) -> String {
+    format!("{a}{b}")
 }
 
 pub fn greeting() -> String {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { pathToFileURL } from "node:url";
 import { createExtension } from "../../../src/extension.js";
 import { RuntimeSession } from "../../../src/runtime/session.js";
 import { createProject, fakeConfig, removeProject } from "../runtime/runtime-test-helpers.js";
@@ -37,7 +38,9 @@ afterEach(async () => {
   await Promise.all(projects.splice(0).map(removeProject));
 });
 
-async function setup(options: { trusted?: boolean; codeActions?: boolean } = {}) {
+async function setup(
+  options: { trusted?: boolean; codeActions?: boolean; contextEcho?: boolean } = {},
+) {
   const project = await createProject(options.trusted ?? true);
   projects.push(project.projectRoot);
   const session = await RuntimeSession.create({
@@ -45,6 +48,12 @@ async function setup(options: { trusted?: boolean; codeActions?: boolean } = {})
     projectRoot: project.projectRoot,
     trustStorePath: project.trustStorePath,
   });
+  if (options.contextEcho && session.configResult.ok && session.configResult.config.lsp !== false) {
+    session.configResult.config.lsp.fake!.env = {
+      ...session.configResult.config.lsp.fake!.env,
+      FAKE_CODE_ACTION_CONTEXT_ECHO: "1",
+    };
+  }
   sessions.push(session);
   const pi = fakePiApi();
   createExtension({ createSession: vi.fn(async () => session) as never })(pi as never);
@@ -105,6 +114,40 @@ describe("LSP code actions tool", () => {
     );
     const outputLines = output.split("\n");
     expect(outputLines.some((entry) => entry.startsWith("2. [needs resolve]"))).toBe(true);
+  });
+
+  it("sends the current cached diagnostics in the required code action context", async () => {
+    const { filePath, projectRoot, session, tool } = await setup({
+      codeActions: true,
+      contextEcho: true,
+    });
+    const uri = pathToFileURL(filePath).href;
+    const rawItem = {
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+      severity: 1,
+      code: 2322,
+      source: "fixture",
+      message: "Type 'string' is not assignable to type 'number'",
+    };
+    session.diagnostics.record({
+      serverId: "fake",
+      uri,
+      version: 1,
+      receivedAt: 1,
+      origin: "push",
+      items: [
+        {
+          range: rawItem.range,
+          severity: 1,
+          code: rawItem.code,
+          source: rawItem.source,
+          message: rawItem.message,
+        },
+      ],
+      rawItems: [rawItem],
+    });
+    const output = await execute(tool, filePath, projectRoot);
+    expect(output).toContain(`context echo ${JSON.stringify({ diagnostics: [rawItem] })}`);
   });
 
   it("previews inline and resolved edits without applying them", async () => {
