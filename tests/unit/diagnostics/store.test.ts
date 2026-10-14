@@ -157,4 +157,32 @@ describe("diagnostics store", () => {
     expect(store.has("ts", "file:///a.ts")).toBe(true);
     expect(store.get("ts", "file:///a.ts")?.origin).toBe("pull");
   });
+
+  it("documents F9: an empty push at the same version replaces a rustc-bearing push", () => {
+    const store = new DiagnosticsStore();
+    store.record({
+      ...snapshot(1, "E0425: cannot find value `undefined_helper`"),
+      origin: "push" as const,
+    });
+    store.record({ ...snapshot(1, ""), items: [], origin: "push" as const });
+
+    // Last push wins: a native empty clear erases the flycheck items at equal version —
+    // the transient loss recorded as finding F9. The error snapshot is retained as baseline.
+    expect(store.get("ts", "file:///a.ts")?.items).toHaveLength(0);
+    expect(store.baseline("ts", "file:///a.ts")?.items[0]?.message).toBe(
+      "E0425: cannot find value `undefined_helper`",
+    );
+  });
+
+  it("records a version-advanced empty push as a genuine clear", () => {
+    const store = new DiagnosticsStore();
+    store.record({
+      ...snapshot(1, "E0425: cannot find value `undefined_helper`"),
+      origin: "push" as const,
+    });
+    store.record({ ...snapshot(2, ""), items: [], origin: "push" as const });
+
+    expect(store.get("ts", "file:///a.ts")?.version).toBe(2);
+    expect(store.get("ts", "file:///a.ts")?.items).toHaveLength(0);
+  });
 });
