@@ -153,3 +153,17 @@ contracts.
   pid and never spawns servers. Native review: claimed by the next RDD
   reminder with tight base `cab114c2446f…` (committedOnly) — this
   slice's candidate is `886c415` + `c117e27`.
+- RDD reminder (target `sha256:d01579ac…`) claimed the slice:
+  **APPROVED** — lineage `review-f995e08839aff9db`, HIGH
+  (`process_boundary`: `tests/smoke/pi-host-fixture.ts`,
+  `signal: shell_process`), lenses `review-risk` + `review-resilience` +
+  `review-reliability`, 3 paths / 487 lines, correction budget 200,
+  tight base `cab114c2446f…` (committedOnly; candidate `886c415` +
+  `c117e27` + `0391a56`). Reviewer group forecast (3 host-relay runs)
+  acknowledged; approved on the last admitted event; acknowledgement
+  burned (consumed revision `sha256:3639776c…`). Two NON-BLOCKING
+  informational advisories: R3-001 `reliability` WARNING and R4-001
+  `resilience` WARNING, both at `tests/smoke/pi-host.smoke.test.ts:247`
+  (the session-registry teardown area) — separate later work per their
+  receipts; neither reopens this review. Delivery: ordinary repository
+  policy.
