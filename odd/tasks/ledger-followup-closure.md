@@ -81,13 +81,49 @@ outcomes do not authorize merge, branch/worktree deletion, or push.
 
 ## Acceptance and status
 
-- [ ] All rows have evidence and bounded next actions or a clear resolution.
-- [ ] Completed historical T1/T4 status agrees with recorded results.
-- [ ] Unknown advisory prose is explicitly unknown, not reconstructed.
-- [ ] No unsupported universal claim about RA assists/lenses remains in
-      the newly authored current summary; historical evidence is retained.
-- [ ] Verification and delivery status are accurately separated.
+- [x] All rows have evidence and bounded next actions or a clear
+      resolution — 10-row Final disposition ledger in
+      `hardening-ledger.md` (F5/F8/F9, raw-dispose, three non-conflated
+      R3-001 instances + R4-001, two deferred-by-design items, the
+      newly observed prewarm flake).
+- [x] Completed historical T1/T4 status agrees with recorded results —
+      T1 → `0ff03f9` + subsequent batteries; T4 → L4 battery + burned
+      review `review-c527e94ae95b35dd`.
+- [x] Unknown advisory prose is explicitly unknown, not reconstructed —
+      the old `:372` R3-001 row states prose unrecoverable and declines
+      to act on it.
+- [x] No unsupported universal claim about RA assists/lenses remains in
+      the newly authored current summary; historical evidence is
+      retained — historical "server-side" dispositions kept verbatim
+      with superseded banners; the table scopes F5/F8 to RA 1.95.0 +
+      this client's capability set.
+- [x] Verification and delivery status are accurately separated —
+      battery receipts below; no merge, push, branch deletion, or issue
+      publication occurred.
 
-C0–C3: **pending; not executed**. Current authorization covers creation and
-validation of these three planning documents only. No implementation,
-probe, installation, issue publication, merge, or push has occurred.
+C0–C3: **executed** on `feature/ledger-followup-closure`, created from
+the fully-reviewed stack tip `10af637a20a…` (`feature/ra-capability-fix`)
+rather than `main` — the F5/F8 reconciliation requires the
+capability-fix content, and the main-merge decision stays with the
+user. The plans-branch disposition resolved itself: all three planning
+branches are merged into the stack (`git branch --merged HEAD`).
+Commits: `6294545` (reconciliation) → `d2e041e` (prewarm flake
+disposition) → this closure record.
+
+Battery on the final combined tree (docs diff only; executable content
+identical to the reviewed capability-fix tip): gopls smoke **8/8**,
+rust-analyzer smoke **8/8**, pi-host smoke **5/5**, **0 orphan**
+processes; lint, typecheck, build, `format:check` clean; bare suite
+hunted 3× after a first-run flake — **green / 1 failed / green**, then
+a focused 10× stress of the flagged file alone (**9 green / 1 failed
+in isolation**) identified `prewarm.test.ts:137` as an intrinsic
+single-tick timing race, dispositioned in the ledger above rather than
+speculatively patched. Consistency checks: all seven cited commit SHAs
+resolve, all seven cross-referenced task docs exist, README verified to
+need no correction. Runtime verification for the passive docs diff
+itself: N/A — the diff contains no executable content; this reason is
+recorded per plan.
+
+Delivery decisions (merge, push, deletions, any prewarm-test-fix
+slice) remain explicitly with the user. Nothing was published
+upstream; no issue identifiers were invented.
