@@ -62,10 +62,10 @@ rust-analyzer-smoke.md` (L4 F5, review record R3-001),
 | # | Work | Route | Verification | Status |
 |---|------|-------|--------------|--------|
 | T0 | Advisory-tail audit: classify seed list, fix trivially-live items | inline (reads) + worker if fixes span files | fixed/stale/live table below; unit green | **done** — docs-only; no live item met the RED→GREEN bar (table below) |
-| T1 | Smoke hygiene: PATH-default bins (both tests), gopls S5 shared-marker assertions | worker | both gated smokes 8/8; bare test spawns nothing | todo |
+| T1 | Smoke hygiene: PATH-default bins (both tests), gopls S5 shared-marker assertions | worker | both gated smokes 8/8; bare test spawns nothing | **done** — `0ff03f9` (smoke hygiene); both gated smokes 8/8 in L4 and re-verified by every subsequent slice battery; bare suite spawns nothing |
 | T2 | F9 store merge + F8 context verification (one coherent product commit; shared store/session/fixture surfaces) | worker (RED→GREEN) | unit: interleaved two-source pushes preserve both; rust smoke S3 delta always-assertable (auto-tighten) or F9 honestly stays recorded; S5 flip on RA asserted; gopls 8/8 | **done — honesty gate fired**: probe found no stable discriminant (native pushes are empty; items all `source:"rustc"`); no store change made; harness settings-shape fix landed instead; rust smoke 8/8 |
-| T3 | F5 probe + disposition | inline (probe) + docs | probe evidence verbatim in Log; client-side fix or documented server-side finding | **done — server-side confirmed**: 0 lenses under valid settings through the real stack, both unwrapped (our section-content contract) and wrapped shapes; `codeLensProvider:{resolveProvider:true}` advertised; settings shape ruled out as the cause |
-| T4 | Closure: full battery, README wording where behavior text changed, assess + review per RDD | inline + native | all green; slice review burned | todo |
+| T3 | F5 probe + disposition | inline (probe) + docs | probe evidence verbatim in Log; client-side fix or documented server-side finding | **done — superseded classification**: recorded "server-side confirmed" at the time (0 lenses under valid settings, both shapes, `codeLensProvider:{resolveProvider:true}` advertised) — reclassified by the rust-compatibility-investigation (R4) as a **client-side capability gap** and closed by `ra-capability-fix` (`3ebce14`); see Final disposition ledger |
+| T4 | Closure: full battery, README wording where behavior text changed, assess + review per RDD | inline + native | all green; slice review burned | **done** — L4 battery all green; RDD reminder claimed the slice: `review-c527e94ae95b35dd` APPROVED zero findings (burned `sha256:4b13d5cd…`) |
 
 ## Audit seed list (from receipts; line numbers historical)
 
@@ -134,11 +134,16 @@ deleted after evidence capture. Verbatim key lines:
   variants (`empty`/`all`/`native-only`/`flycheck-only`) →
   `result=null` — **F8 disposition: server-side.** rust-analyzer
   offers no actions at flycheck-error positions regardless of context;
-  no product change can fix this.
+  no product change can fix this. *(Superseded: the null was the
+  missing `codeActionLiteralSupport` capability, not context
+  blindness — see Final disposition ledger.)*
 - `P3 [F5] valid-unwrapped: 0 lenses` and `P5 [F5] wrapped: 0 lenses`
   with `codeLensProvider={"resolveProvider":true}` — **F5
   disposition: server-side.** Zero lenses under correct settings
   through both configuration shapes; the settings shape is ruled out.
+  *(Superseded: lens emission is gated on the client's
+  `experimental.commands.commands` capability — see Final disposition
+  ledger.)*
 - Standalone probe: `showMessage[2] invalid config value:
   /checkOnSave: invalid type: map, expected a boolean` (×3) — the
   smoke's `checkOnSave: { command: "check" }` shape has been silently
@@ -157,6 +162,42 @@ convergence, already asserted honestly by the S3 dual-form contract).
 No speculative store change was made — exactly the plan's honesty
 c gate. The store's finding-fixes semantics (pull-preserves-push,
 version monotonicity) are untouched.
+
+## Final disposition ledger (ledger-followup-closure)
+
+Authoritative current state for every retained finding and advisory.
+Historical dispositions above are preserved verbatim as receipts of
+what the then-current evidence showed; this table supersedes them
+where they conflict. Each row names the identifier, original
+observation, current scope, result, source evidence, and the next
+action with its revisit condition.
+
+| ID | Original observation | Current scope | Result | Source evidence | Next action / revisit trigger |
+|---|---|---|---|---|---|
+| F5 | `codeLens → []` from rust-analyzer (empty lens list) | rust-analyzer 1.95.0 + this client's initialize capabilities | **fixed** — client capability gap: Run/Debug lenses gated on `experimental.commands.commands` | investigation L3 probe B (real `▶︎ Run Tests` / `rust-analyzer.runSingle` lens) + L5; `3ebce14` advertises the commands; rust smoke S6 asserts a real rendered lens (`nonTrivial`) | none — reopen only if RA changes lens gating or a new RA version is smoke-tested |
+| F8 | `codeAction → null` at rustc-error positions | rust-analyzer 1.95.0 + client caps | **fixed** — client capability gap: `handle_code_action` returns null without `codeActionLiteralSupport` and never reads `context.diagnostics` | investigation L2 upstream research + L3 probe B (`Generate undefined_helper function` at the original error position) + L5; `3ebce14` advertises the literal support; rust smoke S5 reaches the previewable preview path | none — same trigger as F5 |
+| F9 | empty native push transiently clobbers rustc items at the same version | push diagnostics store; RA native + flycheck streams | **unresolved — server/protocol limitation, intentionally retained**; merge-by-source rejected (empty pushes carry no `source`, so slots cannot be attributed); harm is transient and self-healing (~0.2 s–2 s+ convergence) | T2 probe evidence (above); unit pins `dd4b08b` (same-version replace + version-advanced genuine clear, 15/15); timeline: genuine errors=0 clear at v=3 | none locally — revisit on protocol/stream-identity evidence (e.g. empty pushes gaining an attributable source) |
+| S5 raw-dispose leak (pi-host-smoke finding) | raw `AgentSession.dispose()` never emits `session_shutdown`; one gopls + telemetry child outlive it (exit when the worker's stdio closes; no lasting leak) | raw SDK path only — NOT the production path | **recorded SDK limitation, no fix** — identical in devDependency 1.1.0 and host 1.2.0; production `AgentSessionRuntime.dispose()` emits `{reason:"quit"}`, and hardening S5 asserts owned gopls → 0 within 10 s (passed first green) | pi-host-smoke L2 finding; hardening H0 discovery + L2 (`886c415`) | none — revisit if the SDK changes raw dispose semantics or the fixture adopts raw sessions (tested: `@earendil-works/pi-coding-agent` 1.1.0 / host 1.2.0) |
+| R3-001 (pi-host-smoke review, `pi-host.smoke.test.ts:372`) | reliability WARNING advisory | location predates the hardening slice's harness restructure (`886c415`) | **historical — prose unknown**: only id/lens/location/severity/disposition survived (session closure event); the original review remains approved; text unrecoverable | pi-host-smoke review record (`review-e7a90f5b816e346f`, burned `sha256:f50cec5f…`) | none — acting on an unknown recommendation would mean inventing prose |
+| R3-001 + R4-001 (hardening review, both `pi-host.smoke.test.ts:247`) | reliability + resilience WARNING, session-registry teardown area; informational, non-blocking | current harness file; unchanged since the review | **open — deferred as separate later work per their receipts**; neither reopens the review | hardening review record (`review-f995e08839aff9db`, burned `sha256:3639776c…`) | revisit when `pi-host.smoke.test.ts` is next substantively edited |
+| R3-001 (capability-fix review, `src/lsp/client.ts:233-235`) | CRITICAL reliability entry raised by the refuter | adjudicated inside the review | **refuted** — non-blocking per the closure statement; does not reopen | ra-capability-fix review record (`review-afe3535f790e5fa4`, burned `sha256:e9310f95…`) | none |
+| render-budget readability (`preview/workspace-edit.ts:219` era) | char-budget arithmetic hard to read; no reproducible failure | intentionally deferred | **intentionally retained** — not a proven defect; below the RED→GREEN bar | T0 audit table (above) | revisit only with a deterministic failing case |
+| stateless code-action index selection (`lsp-code-actions-tool.ts:105` era) | list-then-select index inherent to the stateless contract | intentionally deferred | **intentionally retained** — deterministic within one result sequence; documented via footer | T0 audit table (above) | revisit only if the list-then-select contract changes |
+
+Closure notes:
+
+- **Upstream reports: none warranted, none published.** F5/F8: the
+  server behaved per its declared capabilities, so no upstream issue
+  is warranted. The Run/Debug lens capability requirement is already
+  documented upstream (rust-analyzer #18126, cited by investigation
+  L2 research); no new issue was filed, and identifiers would be
+  linked here only after an approved publication actually exists.
+- **Versions pinned at closure:** rust-analyzer 1.95.0, gopls v0.23.0,
+  `@earendil-works/pi-coding-agent` devDependency 1.1.0 (repo smoke)
+  and host 1.2.0. Revisit triggers above are conditioned on these.
+- **README:** checked for stale F5/F8/limitation claims — none found;
+  the code-lens and code-action tool contracts remain accurate, so no
+  README correction was needed in this slice.
 
 ## Verification commands
 
