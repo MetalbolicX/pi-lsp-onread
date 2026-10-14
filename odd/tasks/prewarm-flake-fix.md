@@ -63,7 +63,17 @@ is required.
 
 ## Acceptance
 
-- [ ] Focused stress ≥20×: 0 failures.
-- [ ] Bare suite 3×: all green.
-- [ ] lint/typecheck/format clean.
-- [ ] Ledger row dispositioned fixed with this evidence.
+- [x] Focused stress ≥20×: **0 failures / 20** (run 18–20 shown
+      verbatim: 6 passed each; counter `STRESS FAILURES: 0/20`).
+- [x] Bare suite 3×: **all green — 509 passed | 21 skipped (530)**,
+      49 files + 3 skipped, three consecutive runs.
+- [x] lint (`oxlint`), typecheck (`tsc --noEmit`), format (`biome
+      format`, "No fixes applied") all clean.
+- [x] Ledger row dispositioned **fixed** with this evidence
+      (`hardening-ledger.md`, prewarm session_start flake row).
+
+Status: **complete pending assess/review per RDD.** The defect is
+closed at its root: the wait is outcome-based, the assertion
+unchanged, and 20× stress + 3× bare suite show no recurrence where the
+pre-fix rate was 1/10 isolated and 2/5 full-suite. Commit: `f98f3fe`
+(fix) + this closure record.
