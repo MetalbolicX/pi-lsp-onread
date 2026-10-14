@@ -80,3 +80,15 @@ Complete pending assess/review per RDD. Findings F5 and F8 are closed
 by the capability advertisement; F9 stays recorded (unchanged);
 hardening-ledger disposition reconciliation remains with the
 ledger-followup-closure slice.
+
+## Review record
+
+- Post-implementation assess (committed range, base
+  `d8067db280251c6480e8646b1a45351658985576`): **medium risk**
+  (`executable_change`: `src/lsp/client.ts`), 4 paths / 154 lines,
+  **reviewDue: false (`under_budget`)** — writer self-verification
+  stands (RED observed verbatim → GREEN 17/17; flip verification 8/8
+  ×2 with S5 preview path + S6 lens nonTrivial matched; full battery
+  509 bare + all three smokes + 0 orphans). No native review started
+  per entry rule; if a later reminder claims this target, the tight
+  base above applies. Commits: `3ebce14` (feat) + `a4b3743` (evidence).
