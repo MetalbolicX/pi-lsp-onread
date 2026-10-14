@@ -92,3 +92,21 @@ ledger-followup-closure slice.
   509 bare + all three smokes + 0 orphans). No native review started
   per entry rule; if a later reminder claims this target, the tight
   base above applies. Commits: `3ebce14` (feat) + `a4b3743` (evidence).
+- RDD reminder (target `sha256:01419081…`) claimed the slice:
+  **APPROVED** — lineage `review-afe3535f790e5fa4`, medium
+  (`executable_change`: `src/lsp/client.ts`), lenses `review-risk` +
+  `review-reliability`, 4 paths / 166 lines, correction budget 83,
+  tight base `d8067db2802…` (committedOnly; candidate `8650851` +
+  `3ebce14` + `a4b3743` + `b1b14af`). Both lens reviewers admitted; the
+  provider additionally demanded a **refuter slot** (first time in this
+  project). The host relay's routing file (`~/.pi/gentle-ai/models.json`,
+  human-controlled — model tools are hard-blocked from writing it) lacked
+  `review-refuter`; after four typed refusals across two reloads and a
+  restart, the user ran a prepared script (`/tmp/fix-review-routing.py`,
+  backup `models.json.bak`) adding `review-refuter`/`review-validator`
+  on `glm-5.3-flash` and migrating the four lens roles. The refuter ran
+  (glm-5.3-flash): one `CRITICAL` reliability entry at
+  `src/lsp/client.ts:233-235` with disposition **`refuted`** —
+  non-blocking per the closure statement, does not reopen this review.
+  Approved on the last admitted event; acknowledgement burned (consumed
+  revision `sha256:e9310f95…`). Delivery: ordinary repository policy.
