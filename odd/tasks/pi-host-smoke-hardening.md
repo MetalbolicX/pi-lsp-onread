@@ -137,3 +137,19 @@ contracts.
   (build-first); 0 orphan gopls / rust-analyzer processes; tree clean.
   README unchanged — its `smoke:pi-host` command reference (line 95) is
   still accurate.
+
+## Review record
+
+- Post-implementation assess (committed range, base
+  `cab114c2446f180bba3bcfc2ebe1c4ab3015665f`): **HIGH risk**
+  (`process_boundary`: `tests/smoke/pi-host-fixture.ts` —
+  `signal: shell_process`), 3 paths / 471 lines, **reviewDue: true
+  (`high_risk`)**. Returned plan: writer self-verification + separate
+  independent verifier — both satisfied (writer: 5/5 ×3 + 5/5 ×2
+  shuffle + lint/tsc/format; independent: parent full battery on
+  `886c415`, all green incl. 0 orphan servers). Risk-note: the flagged
+  boundary is the fixture's strictly read-only process inspection
+  (`pgrep -x gopls` + `/proc/<pid>/cwd` readlink); it never signals a
+  pid and never spawns servers. Native review: claimed by the next RDD
+  reminder with tight base `cab114c2446f…` (committedOnly) — this
+  slice's candidate is `886c415` + `c117e27`.
