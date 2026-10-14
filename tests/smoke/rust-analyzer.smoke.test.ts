@@ -27,8 +27,8 @@ const TEST_TIMEOUT = 180_000;
 // Probe-verified against rust-analyzer 1.95 (hardening-ledger slice, 2026-10-13): the previous
 // `checkOnSave: { command: "check" }` shape is rejected verbatim ("invalid config value:
 // /checkOnSave: invalid type: map, expected a boolean") — flycheck only ran on defaults. The
-// modern key is `check`. `lens.enable` is included for shape correctness; codeLens stays
-// server-side empty (F5) under every settings shape.
+// modern key is `check`. `lens.enable` enables Run/Debug lenses — rendered since the
+// ra-capability-fix slice advertised the client commands capability (F5 fixed).
 const RUST_ANALYZER_SETTINGS = {
   check: { command: "check" },
   lens: { enable: true, run: { enable: true }, debug: { enable: true } },
@@ -449,8 +449,11 @@ describe.skipIf(!process.env.RUST_ANALYZER_SMOKE)("layer-1 real rust-analyzer sm
         );
       } else if (/No code actions reported at this position\./.test(listing)) {
         expect(listing).not.toContain("failed to retrieve");
+        // Honest guard: since the capability fix this should not trigger — rust-analyzer
+        // returns assists positionally once codeActionLiteralSupport is advertised (F8 was
+        // the missing capability, not a server quirk).
         observe(
-          "S5 F3 FLIPPED (request accepted with context): rust-analyzer offers no actions for rustc-sourced context diagnostics (native-assist quirk recorded as F8); preview path unreachable on this server",
+          "S5 FINDING: empty code-action listing despite advertised literal support — capability regression?",
         );
       } else {
         const previewable = listing.match(/^(\d+)\. \[(?:previewable|needs resolve)\]/m);
@@ -605,10 +608,10 @@ describe.skipIf(!process.env.RUST_ANALYZER_SMOKE)("layer-1 real rust-analyzer sm
           provider: "codeLensProvider",
           run: () => toolText("lsp_code_lens", project.libPath, { startLine: 1, endLine: 40 }),
           nonTrivial: /L\d+:C\d+ "/,
-          // F5 (documented in odd/tasks/rust-analyzer-smoke.md): rust-analyzer advertises
-          // codeLensProvider and the smoke sends lens settings with a #[test] fn in range,
-          // yet zero lenses are returned. Recorded as an interaction finding; the tool's
-          // empty-with-coverage output is the honest result under test.
+          // F5 FIXED (ra-capability-fix): the client now advertises codeActionLiteralSupport +
+          // experimental.commands.commands, so rust-analyzer returns Run/Debug lenses here.
+          // allowEmptyFinding stays as honest regression detection: an empty result re-raises
+          // the finding instead of passing silently.
           allowEmptyFinding: true,
         },
       ];

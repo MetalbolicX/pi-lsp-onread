@@ -236,6 +236,41 @@ describe("LSP client", () => {
   );
 
   it(
+    "advertises codeAction literal support and the rust-analyzer experimental commands",
+    async () => {
+      const client = await createClient();
+      expect((await client.ensure()).ok).toBe(true);
+      const capabilities = await client.request<Record<string, unknown>>(
+        "custom/initializeCapabilities",
+      );
+      expect(capabilities.ok).toBe(true);
+      if (!capabilities.ok) throw new Error("expected an initialize-capabilities response");
+      // F5/F8 (rust-compatibility-investigation): rust-analyzer gates Run/Debug lenses on
+      // experimental.commands.commands and returns null code actions without literal support.
+      expect(capabilities.value).toMatchObject({
+        textDocument: {
+          codeAction: {
+            codeActionLiteralSupport: {
+              codeActionKind: {
+                valueSet: expect.arrayContaining(["quickfix", "refactor", "source"]),
+              },
+            },
+          },
+        },
+        experimental: {
+          commands: {
+            commands: expect.arrayContaining([
+              "rust-analyzer.runSingle",
+              "rust-analyzer.debugSingle",
+            ]),
+          },
+        },
+      });
+    },
+    timeout,
+  );
+
+  it(
     "sends didSave immediately after a full-text didChange with the synced text",
     async () => {
       const client = await createClient();

@@ -213,8 +213,28 @@ export class LspClient {
           textDocument: {
             synchronization: { dynamicRegistration: false, willSave: false, didSave: true },
             diagnostic: {},
+            codeAction: {
+              codeActionLiteralSupport: {
+                codeActionKind: {
+                  valueSet: [
+                    "quickfix",
+                    "refactor",
+                    "refactor.extract",
+                    "refactor.inline",
+                    "refactor.rewrite",
+                    "source",
+                    "source.organizeImports",
+                  ],
+                },
+              },
+            },
           },
           general: { positionEncodings: ["utf-16"] },
+          experimental: {
+            commands: {
+              commands: ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"],
+            },
+          },
         },
         initializationOptions: this.options.initializationOptions ?? null,
       },
