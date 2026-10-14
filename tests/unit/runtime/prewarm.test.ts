@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RuntimeSession } from "../../../src/runtime/session.js";
 import { activate } from "../../../src/runtime/activation.js";
 import { prewarmServers } from "../../../src/runtime/prewarm.js";
@@ -133,7 +133,13 @@ describe("runtime prewarm", () => {
     const handler = handlers.get("session_start")?.[0];
     expect(handler).toBeDefined();
     await handler?.({}, { cwd: project.projectRoot });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(attempts).toBe(1);
+    // The extension's session_start handler is fire-and-forget
+    // (src/extension.ts: `void (async …)()`), so the spawn resolves an
+    // implementation-defined number of ticks later. Poll for the
+    // outcome instead of assuming one setTimeout(0) tick is enough.
+    await vi.waitFor(() => expect(attempts).toBe(1), {
+      timeout: 2000,
+      interval: 10,
+    });
   });
 });
