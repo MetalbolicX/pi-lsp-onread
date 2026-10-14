@@ -1,6 +1,7 @@
 # Feature: pi-host-smoke-hardening
 
-**Plan only; implementation requires a later user go-ahead.** Strengthen
+**Executed.** Plan authored and approved before implementation;
+Strengthen
 what the real-Pi-host smoke actually proves: trusted server usability,
 cold read activation, and production shutdown. First of three planned
 slices; surfaces are disjoint from
@@ -13,8 +14,9 @@ parallel only by explicit decision); outcomes land in
 Planning baseline: synchronized `main` at
 `ede820fc5c560f3d58521f41f0213e4d3ed97f80`. Planning branch:
 `feature/ledger-followup-plans`. Historical evidence:
-[pi-host-smoke](pi-host-smoke.md); all verification below is future work,
-not a claim of new test results.
+[pi-host-smoke](pi-host-smoke.md). The gap bullets below are the
+pre-implementation findings; each was fixed and verified in this slice
+(Log L1–L3).
 
 - S4's trusted half accepts the generic string `coverage:`; that alone
   does not prove positive coverage or successful server diagnostics.
@@ -39,21 +41,21 @@ not a claim of new test results.
 
 ## Acceptance and test-first contract
 
-- [ ] Bare tests do not spawn servers, mutate HOME, or require credentials.
-- [ ] CLI-authored config/trust, built bundle, scripted no-network model,
+- [x] Bare tests do not spawn servers, mutate HOME, or require credentials.
+- [x] CLI-authored config/trust, built bundle, scripted no-network model,
       isolated storage, and all 18 registered tools remain covered.
-- [ ] S4 proves both refusal and real trusted usability, not text alone.
-- [ ] S3 proves cold read-triggered activation independently of S4.
-- [ ] No scenario silently depends on another's execution order:
+- [x] S4 proves both refusal and real trusted usability, not text alone.
+- [x] S3 proves cold read-triggered activation independently of S4.
+- [x] No scenario silently depends on another's execution order:
       explicit per-scenario setup or an explicit ordering assertion.
-- [ ] H0 selects an observable supported seam; if activation cannot be
+- [x] H0 selects an observable supported seam; if activation cannot be
       distinguished without private SDK APIs, pause rather than weaken
       the claim or change product source silently.
-- [ ] Production shutdown exits owned children with a bounded wait;
+- [x] Production shutdown exits owned children with a bounded wait;
       unrelated processes are never killed. A failed shutdown fails S5.
-- [ ] Exact-name global process counts are supplementary observations,
+- [x] Exact-name global process counts are supplementary observations,
       not the ownership oracle. Cleanup is idempotent and runs on failure.
-- [ ] HOME and scripted credential environment are restored after failure.
+- [x] HOME and scripted credential environment are restored after failure.
 
 For deterministic behavior changes, observe RED → GREEN with meaningful
 negative cases (zero coverage, read failure/no activation, missing shutdown
@@ -85,7 +87,53 @@ No merge, push, or new native review is authorized by this plan.
 
 ## Status
 
-H0–H4: **pending; not executed**. Plan creation is the only work authorized
-in the current turn. Continue with the Rust investigation after this
-slice is accepted; its existing recorded findings are not prerequisites
-for fixing the local smoke contracts.
+H0–H4: **complete** on `feature/pi-host-smoke-hardening` — `886c415`
+harness contracts (H1–H3, +301/−90) plus this closure record. Execution
+evidence in the Log below. The Rust investigation is next; its existing
+recorded findings are not prerequisites for the now-fixed local smoke
+contracts.
+
+## Log
+
+- L1 (H0 discovery): devDependency resolved **1.1.0 exact** (repo
+  declares `^1.1.0`); global Pi host **1.2.0** (pnpm hash `2bf4a-…`;
+  the plan-time `1067-…` path hash was stale — corrected).
+  `session_shutdown` emission is **identical in both versions**:
+  `AgentSessionRuntime.dispose()` emits `{reason:"quit"}` before
+  `session.dispose()` (1.1.0 `agent-session-runtime.js:298`), while raw
+  `AgentSession.dispose()` emits nothing (1.1.0
+  `agent-session.js:992-1013`; 1.2.0 `:996`) — the recorded S5 gap is
+  version-independent; no dependency bump needed. Production path is
+  fully public (package root `index.d.ts:20`):
+  `createAgentSessionServices` → `createAgentSessionFromServices` →
+  `new AgentSessionRuntime(session, services, factory)`. gopls spawns as
+  exactly `["gopls"]` with `cwd = projectRoot` (`transport.ts:26-31`),
+  no env marker → ownership oracle = read-only `/proc/<pid>/cwd`
+  realpath compare against the fixture root. Extension teardown chain:
+  `pi.on("session_shutdown")` (`src/extension.ts:231-244`) →
+  `RuntimeSession.dispose()` → SIGTERM→500ms→SIGKILL
+  (`transport.ts:48-67`).
+- L2 (H1–H3, one worker pass, `886c415`): **H2 real RED** captured
+  pre-restructure — S3's new pre-read assertion on the old warmed
+  sessionB failed: `expected [ 186663 ] to have a length of +0 but got
+  1` (S4 had already activated gopls). GREEN after: fresh session sees
+  0 owned pre-read → read success → owned ≥ 1 → `undefinedHelper` +
+  `fresh: current`. **H1** strengthened-contract / passed-pre-change
+  (honest; the pre-change S4 output — `pending — no diagnostics received
+  yet from go` + `coverage: 1 server(s) checked` — is the exact
+  zero-coverage pass the old contract accepted). **H3**
+  strengthened-contract / passed-pre-change: production shutdown passed
+  first green (`S5 owned gopls after runtime.dispose() = <none>`).
+  Justified deviation: ALL host sessions build through the production
+  runtime path, not only S5 — the cwd-scoped oracle and S5's `owned == 0`
+  assertion require every scenario to reap its own children (a raw
+  session would leak an owned gopls past its scenario). S4 pre-trusted
+  skip verified under 2 `--sequence.shuffle` runs. Worker validation:
+  5/5 ×3 + 5/5 ×2 shuffle; bare suite skipped cleanly; lint/tsc/format
+  clean.
+- L3 (H4, parent battery on `886c415`): bare `pnpm test` 506 passed /
+  21 skipped (52 files); lint, typecheck, build, `format:check` clean;
+  gopls smoke 8/8; rust-analyzer smoke 8/8; `smoke:pi-host` 5/5
+  (build-first); 0 orphan gopls / rust-analyzer processes; tree clean.
+  README unchanged — its `smoke:pi-host` command reference (line 95) is
+  still accurate.
