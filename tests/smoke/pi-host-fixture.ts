@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readlink, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -87,4 +88,45 @@ export async function createPiHostProject(): Promise<PiHostSmokeProject> {
 export async function removePiHostProject(project: PiHostSmokeProject): Promise<void> {
   await rm(project.projectRoot, { recursive: true, force: true });
   await rm(project.homeDir, { recursive: true, force: true });
+}
+
+/**
+ * Read-only ownership oracle for gopls servers spawned by this fixture.
+ *
+ * The extension spawns gopls as exactly `["gopls"]` with `cwd = projectRoot`
+ * (src/runtime/session.ts), so `/proc/<pid>/cwd` is a stable ownership signal
+ * even when unrelated gopls instances exist on the machine. A process is owned
+ * iff its resolved cwd equals the resolved `projectRoot`. An unreadable
+ * `/proc/<pid>` entry (race, permissions, already exited) is not owned.
+ *
+ * Strictly read-only: pids are enumerated and inspected, never signalled.
+ */
+export async function listOwnedGopls(projectRoot: string): Promise<number[]> {
+  let pids: number[];
+  try {
+    const output = execFileSync("pgrep", ["-x", "gopls"], { encoding: "utf8" });
+    pids = output.split("\n").filter(Boolean).map(Number);
+  } catch {
+    // pgrep exits non-zero when there are no matches.
+    return [];
+  }
+
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = await realpath(projectRoot);
+  } catch {
+    canonicalRoot = projectRoot;
+  }
+
+  const owned: number[] = [];
+  for (const pid of pids) {
+    if (!Number.isInteger(pid)) continue;
+    try {
+      const cwd = await readlink(`/proc/${pid}/cwd`);
+      if ((await realpath(cwd)) === canonicalRoot) owned.push(pid);
+    } catch {
+      /* unreadable /proc entry => not owned */
+    }
+  }
+  return owned;
 }

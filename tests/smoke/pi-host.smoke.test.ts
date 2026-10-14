@@ -1,13 +1,16 @@
 import { execFile, execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
   type AgentSession,
-  createAgentSession,
-  DefaultResourceLoader,
+  AgentSessionRuntime,
+  createAgentSessionFromServices,
+  createAgentSessionServices,
+  type CreateAgentSessionRuntimeFactory,
   type LoadExtensionsResult,
   ModelRuntime,
   SessionManager,
@@ -15,6 +18,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createPiHostProject,
+  listOwnedGopls,
   type PiHostSmokeProject,
   removePiHostProject,
 } from "./pi-host-fixture.js";
@@ -26,6 +30,7 @@ const CLI_BUNDLE = resolve(REPO_ROOT, "dist", "cli.js");
 const TEST_TIMEOUT = 180_000;
 const INIT_TIMEOUT = 90_000;
 const ACTIVATION_WAIT_MS = 30_000;
+const SHUTDOWN_WAIT_MS = 10_000;
 const SCRIPTED_PROVIDER = "scripted";
 const SCRIPTED_MODEL_ID = "scripted-1";
 
@@ -215,9 +220,42 @@ describe.skipIf(!process.env.PI_HOST_SMOKE)("layer-2 real Pi host smoke", () => 
   let originalHome: string | undefined;
   let modelRuntime: ModelRuntime;
   let sessionA: AgentSession;
-  let sessionB: AgentSession | undefined;
   let extensionsA: LoadExtensionsResult;
-  let disposed = false;
+
+  interface TrackedSession {
+    label: string;
+    session: AgentSession;
+    runtime: AgentSessionRuntime;
+    disposed: boolean;
+  }
+  const tracked: TrackedSession[] = [];
+
+  function track(
+    label: string,
+    session: AgentSession,
+    runtime: AgentSessionRuntime,
+  ): TrackedSession {
+    const record: TrackedSession = { label, session, runtime, disposed: false };
+    tracked.push(record);
+    return record;
+  }
+
+  /** Idempotent teardown; `runtime.dispose()` emits `session_shutdown` before raw session disposal. */
+  async function disposeTracked(record: TrackedSession): Promise<void> {
+    if (record.disposed) return;
+    record.disposed = true;
+    await record.runtime.dispose();
+  }
+
+  async function disposeAllTracked(): Promise<void> {
+    for (const record of [...tracked].reverse()) {
+      try {
+        await disposeTracked(record);
+      } catch {
+        /* afterAll cleanup must never mask the original failure */
+      }
+    }
+  }
 
   function requireModel() {
     const model = modelRuntime.getModel(SCRIPTED_PROVIDER, SCRIPTED_MODEL_ID);
@@ -233,25 +271,51 @@ describe.skipIf(!process.env.PI_HOST_SMOKE)("layer-2 real Pi host smoke", () => 
     return `${stdout}${stderr}`;
   }
 
+  /**
+   * Build a host session through the production runtime path (services -> fromServices ->
+   * AgentSessionRuntime -> bindExtensions). `AgentSessionRuntime.dispose()` emits
+   * `{type:"session_shutdown", reason:"quit"}` before `session.dispose()`, which the extension
+   * needs to dispose its RuntimeSession and SIGTERM pooled servers.
+   *
+   * A raw `AgentSession.dispose()` never emits `session_shutdown` (recorded finding in
+   * odd/tasks/pi-host-smoke-hardening.md), so a raw session would leak an owned gopls past its
+   * scenario and pollute S5's owned-process assertion. Every host session therefore goes through
+   * the runtime so each scenario can tear down its own children.
+   */
   async function createHostSession(): Promise<{
     session: AgentSession;
     extensionsResult: LoadExtensionsResult;
+    record: TrackedSession;
   }> {
-    const loader = new DefaultResourceLoader({
+    const createRuntime: CreateAgentSessionRuntimeFactory = async (options) => {
+      const services = await createAgentSessionServices({
+        cwd: options.cwd,
+        agentDir: options.agentDir,
+        modelRuntime,
+        resourceLoaderOptions: { additionalExtensionPaths: [EXTENSION_BUNDLE] },
+      });
+      const created = await createAgentSessionFromServices({
+        services,
+        sessionManager: options.sessionManager,
+        model: requireModel(),
+      });
+      return { ...created, services, diagnostics: services.diagnostics };
+    };
+    const services = await createAgentSessionServices({
       cwd: project.projectRoot,
       agentDir: project.agentDir,
-      additionalExtensionPaths: [EXTENSION_BUNDLE],
+      modelRuntime,
+      resourceLoaderOptions: { additionalExtensionPaths: [EXTENSION_BUNDLE] },
     });
-    await loader.reload();
-    const { session, extensionsResult } = await createAgentSession({
-      cwd: project.projectRoot,
-      resourceLoader: loader,
+    const created = await createAgentSessionFromServices({
+      services,
       sessionManager: SessionManager.inMemory(),
       model: requireModel(),
-      modelRuntime,
     });
-    await session.bindExtensions({});
-    return { session, extensionsResult };
+    await created.session.bindExtensions({});
+    const runtime = new AgentSessionRuntime(created.session, services, createRuntime);
+    const record = track("host", created.session, runtime);
+    return { session: created.session, extensionsResult: created.extensionsResult, record };
   }
 
   async function promptAndCollect(
@@ -263,21 +327,63 @@ describe.skipIf(!process.env.PI_HOST_SMOKE)("layer-2 real Pi host smoke", () => 
     return toolResults(session.messages.slice(start));
   }
 
-  function requireSessionB(): AgentSession {
-    if (!sessionB) throw new Error("S4 must run before S3: trusted host session was not created");
-    return sessionB;
+  /** Read-only `/proc/<pid>/cwd` ownership count for the fixture project; never signals a pid. */
+  async function ownedGopls(): Promise<number[]> {
+    return listOwnedGopls(project.projectRoot);
   }
 
-  function disposeSessions(): void {
-    if (disposed) return;
-    disposed = true;
-    for (const session of [sessionA, sessionB]) {
-      try {
-        session?.dispose();
-      } catch {
-        /* dispose must be best-effort during cleanup */
-      }
+  async function waitForOwnedGopls(
+    predicate: (pids: number[]) => boolean,
+    timeoutMs: number,
+  ): Promise<number[]> {
+    let owned = await ownedGopls();
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate(owned) && Date.now() < deadline) {
+      await sleep(250);
+      owned = await ownedGopls();
     }
+    return owned;
+  }
+
+  async function disposeTrackedAndWait(record: TrackedSession): Promise<void> {
+    await disposeTracked(record);
+    const owned = await waitForOwnedGopls((pids) => pids.length === 0, SHUTDOWN_WAIT_MS);
+    observe(`disposed ${record.label} session; owned gopls after shutdown = ${owned.length}`);
+  }
+
+  function trustStorePath(): string {
+    return join(project.agentDir, "lsp.trust.json");
+  }
+
+  async function isTrusted(): Promise<boolean> {
+    try {
+      const parsed = JSON.parse(await readFile(trustStorePath(), "utf8")) as {
+        trustedRoots?: unknown;
+      };
+      return (
+        Array.isArray(parsed.trustedRoots) && parsed.trustedRoots.includes(project.canonicalRoot)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async function ensureTrusted(): Promise<void> {
+    if (await isTrusted()) {
+      observe(`trust already present for ${project.canonicalRoot}; CLI trust add not needed`);
+      return;
+    }
+    const output = await runCli(["trust", "add", project.canonicalRoot]);
+    observe(`CLI trust add output: ${output.trim().replaceAll("\n", " | ")}`);
+  }
+
+  async function createTrustedHostSession(): Promise<{
+    session: AgentSession;
+    extensionsResult: LoadExtensionsResult;
+    record: TrackedSession;
+  }> {
+    await ensureTrusted();
+    return createHostSession();
   }
 
   beforeAll(async () => {
@@ -315,7 +421,7 @@ describe.skipIf(!process.env.PI_HOST_SMOKE)("layer-2 real Pi host smoke", () => 
   }, INIT_TIMEOUT);
 
   afterAll(async () => {
-    disposeSessions();
+    await disposeAllTracked();
     if (project) await removePiHostProject(project);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
@@ -348,30 +454,62 @@ describe.skipIf(!process.env.PI_HOST_SMOKE)("layer-2 real Pi host smoke", () => 
   it(
     "S4 gates diagnostics on the real trust store, then clears after CLI trust add",
     async () => {
-      script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S4-untrusted-done")]);
-      const goplsBefore = countGopls();
-      const untrustedResults = await promptAndCollect(sessionA, "diagnose main.go");
-      const goplsAfter = countGopls();
-      const untrustedOutput = latestDiagnostics(untrustedResults);
-      observe(`S4 untrusted diagnostics output:\n${untrustedOutput}`);
-      expect(untrustedOutput).toContain("Trust this project root with");
-      expect(untrustedOutput).toContain("trust add");
-      observe(`S4 gopls processes before/after untrusted call: ${goplsBefore}/${goplsAfter}`);
-      expect(goplsAfter).toBeLessThanOrEqual(goplsBefore);
+      const preTrusted = await isTrusted();
+      if (preTrusted) {
+        observe(
+          "S4 observe: trust already granted earlier in this run — untrusted assertions skipped honestly",
+        );
+      } else {
+        script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S4-untrusted-done")]);
+        const ownedBefore = await ownedGopls();
+        const untrustedResults = await promptAndCollect(sessionA, "diagnose main.go");
+        const ownedAfter = await ownedGopls();
+        const untrustedOutput = latestDiagnostics(untrustedResults);
+        observe(`S4 untrusted diagnostics output:\n${untrustedOutput}`);
+        expect(untrustedOutput).toContain("Trust this project root with");
+        expect(untrustedOutput).toContain("trust add");
+        observe(
+          `S4 owned gopls before/after untrusted call: ${ownedBefore.length}/${ownedAfter.length}` +
+            ` (global exact-name count, supplementary: ${countGopls()})`,
+        );
+        expect(ownedAfter.length).toBeLessThanOrEqual(ownedBefore.length);
+        expect(ownedAfter).toHaveLength(0);
+      }
 
-      const trustOutput = await runCli(["trust", "add", project.canonicalRoot]);
-      observe(`CLI trust add output: ${trustOutput.trim().replaceAll("\n", " | ")}`);
+      await ensureTrusted();
 
-      const trusted = await createHostSession();
-      sessionB = trusted.session;
-      observe(`S4 trusted session B created after trust add`);
-
-      script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S4-trusted-done")]);
-      const trustedResults = await promptAndCollect(sessionB, "diagnose main.go");
-      const trustedOutput = latestDiagnostics(trustedResults);
-      observe(`S4 trusted diagnostics output:\n${trustedOutput}`);
-      expect(trustedOutput).not.toContain("trust add");
-      expect(trustedOutput).toContain("coverage:");
+      const trusted = await createTrustedHostSession();
+      observe("S4 trusted session created after trust add");
+      try {
+        script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S4-trusted-done")]);
+        let trustedOutput = latestDiagnostics(
+          await promptAndCollect(trusted.session, "diagnose main.go"),
+        );
+        const deadline = Date.now() + ACTIVATION_WAIT_MS;
+        while (
+          !(trustedOutput.includes("coverage:") && trustedOutput.includes("undefinedHelper")) &&
+          Date.now() < deadline
+        ) {
+          await sleep(1_000);
+          script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S4-poll-done")]);
+          trustedOutput = latestDiagnostics(
+            await promptAndCollect(trusted.session, "re-check diagnostics for main.go"),
+          );
+        }
+        observe(`S4 trusted diagnostics output:\n${trustedOutput}`);
+        // The old contract (`toContain("coverage:")`) could not distinguish zero-coverage output:
+        // e.g. "pending — no diagnostics received yet from go" already carries
+        // "coverage: 1 server(s) checked", so it passed before a usable server was ready.
+        expect(trustedOutput).not.toContain("trust add");
+        expect(trustedOutput).toContain("coverage:");
+        expect(trustedOutput).toContain("undefinedHelper");
+      } finally {
+        try {
+          await disposeTrackedAndWait(trusted.record);
+        } catch {
+          /* scenario cleanup is best-effort; afterAll still disposes the registry */
+        }
+      }
     },
     TEST_TIMEOUT,
   );
@@ -379,55 +517,86 @@ describe.skipIf(!process.env.PI_HOST_SMOKE)("layer-2 real Pi host smoke", () => 
   it(
     "S3 activates gopls on a real read and surfaces the deliberate error",
     async () => {
-      const session = requireSessionB();
-      script([
-        toolTurn("read", { path: "main.go" }),
-        toolTurn("lsp_diagnostics", { path: "main.go" }),
-        textTurn("S3-step-done"),
-      ]);
-      const results = await promptAndCollect(session, "read main.go then diagnose it");
-      const readResult = results.find((record) => record.toolName === "read");
-      observe(`S3 read tool result (first 600 chars):\n${(readResult?.text ?? "").slice(0, 600)}`);
+      const trusted = await createTrustedHostSession();
+      const { session } = trusted;
+      try {
+        expect(await ownedGopls()).toHaveLength(0);
 
-      let output = latestDiagnostics(results);
-      const deadline = Date.now() + ACTIVATION_WAIT_MS;
-      while (
-        !(output.includes("undefinedHelper") && /fresh: current/.test(output)) &&
-        Date.now() < deadline
-      ) {
-        await sleep(1_000);
-        script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S3-poll-done")]);
-        const polled = await promptAndCollect(session, "re-check diagnostics for main.go");
-        output = latestDiagnostics(polled);
+        script([toolTurn("read", { path: "main.go" }), textTurn("S3-read-done")]);
+        const readResults = await promptAndCollect(session, "read main.go");
+        const readResult = readResults.find((record) => record.toolName === "read");
+        observe(
+          `S3 read tool result (first 600 chars):\n${(readResult?.text ?? "").slice(0, 600)}`,
+        );
+        expect(readResult?.isError).toBe(false);
+        expect((readResult?.text ?? "").length).toBeGreaterThan(0);
+
+        // No explicit lsp_diagnostics call has run on this session yet, so any owned gopls here
+        // comes from read-triggered activation rather than a diagnostics-triggered activation.
+        const activated = await waitForOwnedGopls((pids) => pids.length >= 1, ACTIVATION_WAIT_MS);
+        observe(`S3 owned gopls after read = ${activated.join(", ") || "<none>"}`);
+        expect(activated.length).toBeGreaterThanOrEqual(1);
+
+        script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S3-step-done")]);
+        let output = latestDiagnostics(await promptAndCollect(session, "diagnose main.go"));
+        const deadline = Date.now() + ACTIVATION_WAIT_MS;
+        while (
+          !(output.includes("undefinedHelper") && /fresh: current/.test(output)) &&
+          Date.now() < deadline
+        ) {
+          await sleep(1_000);
+          script([toolTurn("lsp_diagnostics", { path: "main.go" }), textTurn("S3-poll-done")]);
+          output = latestDiagnostics(
+            await promptAndCollect(session, "re-check diagnostics for main.go"),
+          );
+        }
+        observe(`S3 diagnostics output:\n${output}`);
+        expect(output).toContain("undefinedHelper");
+        expect(output).toMatch(/fresh: current/);
+      } finally {
+        try {
+          await disposeTrackedAndWait(trusted.record);
+        } catch {
+          /* scenario cleanup is best-effort; afterAll still disposes the registry */
+        }
       }
-      observe(`S3 diagnostics output:\n${output}`);
-      expect(output).toContain("undefinedHelper");
-      expect(output).toMatch(/fresh: current/);
     },
     TEST_TIMEOUT,
   );
 
   it(
-    "S5 disposes sessions cleanly and records any surviving gopls process",
+    "S5 production AgentSessionRuntime.dispose() exits owned gopls children",
     async () => {
-      const goplsBefore = countGopls();
-      expect(() => {
-        sessionA.dispose();
-      }).not.toThrow();
-      expect(() => {
-        requireSessionB().dispose();
-      }).not.toThrow();
-      disposed = true;
-      await sleep(2_000);
-      const goplsAfter = countGopls();
-      observe(`S5 gopls processes before dispose = ${goplsBefore}, after dispose = ${goplsAfter}`);
-      observe(`S5 pgrep -a gopls after dispose:\n${listGopls()}`);
-      if (goplsAfter > 0) {
+      const host = await createTrustedHostSession();
+      const { session } = host;
+      const active = session.getActiveToolNames();
+      observe(`S5 production runtime active tools (${active.length}): ${active.join(", ")}`);
+      // Verify the built bundle registered its 18 extension tools through the services path: a
+      // loader that was never reloaded registers zero tools (H0 spike finding).
+      for (const name of LSP_TOOLS) expect(active).toContain(name);
+      expect(LSP_TOOLS.filter((name) => active.includes(name))).toHaveLength(18);
+      const servicesDiagnostics = host.record.runtime.services.diagnostics;
+      if (servicesDiagnostics.length > 0) {
         observe(
-          "S5 FINDING: one gopls server (plus its `gopls ** telemetry **` child) remained after session.dispose(); the raw AgentSession path never emits session_shutdown, so the extension's RuntimeSession.dispose() is not reached (production pi uses AgentSessionRuntime, which does emit it). Both exited once the vitest worker's stdio closed.",
+          `S5 services diagnostics:\n${servicesDiagnostics.map((d) => `${d.type}: ${d.message}`).join("\n")}`,
         );
       }
-      expect(typeof goplsAfter).toBe("number");
+
+      script([toolTurn("read", { path: "main.go" }), textTurn("S5-read-done")]);
+      await promptAndCollect(session, "read main.go");
+
+      const activated = await waitForOwnedGopls((pids) => pids.length >= 1, ACTIVATION_WAIT_MS);
+      observe(`S5 owned gopls after read = ${activated.join(", ") || "<none>"}`);
+      expect(activated.length).toBeGreaterThanOrEqual(1);
+
+      await disposeTracked(host.record);
+      const after = await waitForOwnedGopls((pids) => pids.length === 0, SHUTDOWN_WAIT_MS);
+      observe(`S5 owned gopls after runtime.dispose() = ${after.join(", ") || "<none>"}`);
+      observe(`S5 global exact-name gopls after runtime.dispose():\n${listGopls()}`);
+      // Raw AgentSession.dispose() never emits session_shutdown (recorded finding in
+      // odd/tasks/pi-host-smoke-hardening.md) and is intentionally not re-asserted here; this
+      // test exercises only the production AgentSessionRuntime.dispose() path.
+      expect(after).toHaveLength(0);
     },
     TEST_TIMEOUT,
   );
