@@ -36,6 +36,21 @@ assertion/lifecycle gaps, and R3-001 without conflating them.
   index selection remain intentionally deferred. They are not proven
   defects and are outside these follow-up slices.
 
+## Recorded process decisions
+
+- **Plans-branch disposition (open user decision):** the three planning
+  documents sit on `feature/ledger-followup-plans` (reviewed and burned).
+  Merging them to main now, or carrying them into the first implementation
+  branch instead, is an explicit user decision; closure assumes neither.
+- **Scheduling:** host-smoke hardening and the Rust investigation touch
+  disjoint surfaces (`pi-host.*` vs `rust-analyzer.*`). Default remains
+  sequential for review focus; parallel execution only on explicit user
+  opt-in. Closure depends on both being accepted.
+- **CI posture (explicit non-goal):** all three smoke suites are
+  environment-gated and never run automatically anywhere. No CI
+  scheduling is planned; adding it would be a separately authorized
+  slice, not a closure task.
+
 ## Branch, surfaces, and verification
 
 Planning baseline: synchronized `main` at

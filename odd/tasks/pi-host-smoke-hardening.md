@@ -2,8 +2,10 @@
 
 **Plan only; implementation requires a later user go-ahead.** Strengthen
 what the real-Pi-host smoke actually proves: trusted server usability,
-cold read activation, and production shutdown. First of three slices:
-this plan → [Rust investigation](rust-compatibility-investigation.md) →
+cold read activation, and production shutdown. First of three planned
+slices; surfaces are disjoint from
+[Rust investigation](rust-compatibility-investigation.md) (default order,
+parallel only by explicit decision); outcomes land in
 [ledger closure](ledger-followup-closure.md).
 
 ## Baseline and evidence
@@ -29,9 +31,9 @@ not a claim of new test results.
 
 | Unit | Action | Why | Exit evidence |
 |---|---|---|---|
-| H0 | Read the installed SDK's lifecycle implementation and complete relevant SDK/extension docs; identify the supported production shutdown path and a read-only way to track fixture-owned server processes. | Raw session disposal is not production shutdown; avoid inventing an API or mistaking unrelated gopls instances for leaks. | Exact SDK version, API/source references, lifecycle sequence, and ownership strategy recorded; unsupported access is an explicit blocker. |
+| H0 | Read the installed SDK's lifecycle implementation and complete relevant SDK/extension docs; identify the supported production shutdown path and a read-only way to track fixture-owned server processes. Record BOTH SDK versions in play — the repo devDependency the smoke actually runs (resolved 1.1.x at plan time) and the installed Pi host (1.2.0 at plan time) — and confirm which lifecycle the recorded session_shutdown gap describes. | Raw session disposal is not production shutdown; avoid inventing an API or mistaking unrelated gopls instances for leaks. The smoke exercises the devDependency, not the installed host: hardening against a skewed lifecycle would target the wrong behavior. | Both exact versions with resolution evidence, API/source references, lifecycle sequence, and ownership strategy recorded; a devDependency bump is a separately authorized dependency change, not in-scope; unsupported access is an explicit blocker. |
 | H1 | Tighten S4: retain the untrusted no-spawn assertion; require successful, positive server coverage and the deliberate diagnostic after CLI trust grant in a fresh session. | Generic coverage text can pass without a usable server. | Observed failing negative control, then passing real trust transition; bounded polling handles initialization lag. |
-| H2 | Give S3 a separate fresh trusted session with no preceding diagnostics call. Assert successful built-in read and prove activation before any explicit diagnostics request. | The current warmed session cannot establish that read triggers activation. | No fixture server before read; evidence of read-triggered activation without a diagnostics trigger; then fresh deliberate-error output. |
+| H2 | Give S3 a separate fresh trusted session with no preceding diagnostics call. Assert successful built-in read and prove activation before any explicit diagnostics request. Remove the hidden S4-before-S3 coupling: every scenario owns its setup or asserts its ordering requirement explicitly. | The current warmed session cannot establish that read triggers activation; the present requireSessionB()-style coupling breaks silently under reordering or shuffle. | No fixture server before read; evidence of read-triggered activation without a diagnostics trigger; then fresh deliberate-error output; no scenario implicitly depends on another's execution order. |
 | H3 | Exercise H0's production shutdown path and enforce bounded exit of fixture-owned children. Keep raw SDK dispose as a separately labeled observation if useful. | The current vacuous count assertion cannot catch lifecycle regressions. | Shutdown event/disposal evidence plus owned-process exit within a deadline; cleanup works on partial setup/test failure. |
 | H4 | Run the complete battery and document changed guarantees and remaining limitations. | Stronger assertions must not weaken isolation, read latency, or the other smoke suites. | Commands, exit codes, observations, and review disposition recorded. |
 
@@ -42,6 +44,8 @@ not a claim of new test results.
       isolated storage, and all 18 registered tools remain covered.
 - [ ] S4 proves both refusal and real trusted usability, not text alone.
 - [ ] S3 proves cold read-triggered activation independently of S4.
+- [ ] No scenario silently depends on another's execution order:
+      explicit per-scenario setup or an explicit ordering assertion.
 - [ ] H0 selects an observable supported seam; if activation cannot be
       distinguished without private SDK APIs, pause rather than weaken
       the claim or change product source silently.
