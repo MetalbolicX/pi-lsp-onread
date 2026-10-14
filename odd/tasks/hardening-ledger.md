@@ -183,6 +183,7 @@ action with its revisit condition.
 | R3-001 (capability-fix review, `src/lsp/client.ts:233-235`) | CRITICAL reliability entry raised by the refuter | adjudicated inside the review | **refuted** — non-blocking per the closure statement; does not reopen | ra-capability-fix review record (`review-afe3535f790e5fa4`, burned `sha256:e9310f95…`) | none |
 | render-budget readability (`preview/workspace-edit.ts:219` era) | char-budget arithmetic hard to read; no reproducible failure | intentionally deferred | **intentionally retained** — not a proven defect; below the RED→GREEN bar | T0 audit table (above) | revisit only with a deterministic failing case |
 | stateless code-action index selection (`lsp-code-actions-tool.ts:105` era) | list-then-select index inherent to the stateless contract | intentionally deferred | **intentionally retained** — deterministic within one result sequence; documented via footer | T0 audit table (above) | revisit only if the list-then-select contract changes |
+| prewarm session_start flake (`tests/unit/runtime/prewarm.test.ts:137`) | `expect(attempts).toBe(1)` after a single `setTimeout(0)` tick intermittently observes `0` | the unit test itself — reproduces in isolation and under full-suite parallel load | **newly observed test-infra timing flake — unresolved, deferred**: first observed during this slice's closure battery; test and source untouched since `60e1951`/`d62f17b` (prewarm era, long predating this branch); no product change involved | closure battery verbatim: full-suite 3× hunt = green / 1 failed / green (+ one earlier failure); focused 10× on the file alone = 9 green / 1 failed | fix in a separate authorized test-infra slice (replace the single tick with a bounded poll); revisit at the next touch of the prewarm test |
 
 Closure notes:
 
@@ -198,6 +199,13 @@ Closure notes:
 - **README:** checked for stale F5/F8/limitation claims — none found;
   the code-lens and code-action tool contracts remain accurate, so no
   README correction was needed in this slice.
+- **Bare-suite battery (closure, verbatim):** full-suite 3× hunt =
+  green / 1 failed / green (plus one earlier observed failure); focused
+  stress on the flagged file alone = 9× green / 1 failed in 10; all
+  three gated smokes deterministic green (gopls 8/8, rust-analyzer 8/8,
+  pi-host 5/5) with 0 orphan processes; lint/typecheck/build/format
+  clean. The single flaky unit test is dispositioned in the table
+  above; docs closure is not gated on it.
 
 ## Verification commands
 
