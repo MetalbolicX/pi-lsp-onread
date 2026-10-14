@@ -52,3 +52,31 @@ Focused unit run; `RUST_ANALYZER_SMOKE=1` (S5 preview path + S6 lens
 nonTrivial assert); `GOPLS_SMOKE=1`; `pnpm smoke:pi-host`; bare
 `pnpm test`; lint/typecheck/build/format. Battery recorded in the Log;
 assess + review per RDD.
+
+## Log
+
+- L1 (RED): the new `custom/initializeCapabilities` unit assertion
+  failed against the old capability set — focused run `1 failed |
+  16 passed (17)`, the new test the only failure.
+- L2 (GREEN): capabilities implemented in `src/lsp/client.ts`; focused
+  run **17/17**.
+- L3 (flip verification, gated rust smoke 8/8 both before and after the
+  comment retirement): S5's code-action listing at the unused-import
+  position reached the **previewable preview path** (`S5 code action 1
+  preview:` — previously "unreachable on this server"); S6 `code_lens:
+  ok (advertised=true)` — the `nonTrivial: /L\d+:C\d+ "/` assertion
+  matched a real rendered Run lens (previously the F5 FINDING branch).
+  Stale F5/F8 finding comments retired; the honest empty-result guards
+  stay as regression detection.
+- L4 (battery on final content): bare `pnpm test` **509** passed /
+  21 skipped (+1 new test); lint/typecheck/build clean; `format:check`
+  caught a biome nit in `client.ts` — auto-fixed, re-verified OK;
+  gopls smoke 8/8; rust-analyzer smoke 8/8; `smoke:pi-host` 5/5;
+  0 orphan processes. Commits: `3ebce14` (feat) + this closure record.
+
+## Status
+
+Complete pending assess/review per RDD. Findings F5 and F8 are closed
+by the capability advertisement; F9 stays recorded (unchanged);
+hardening-ledger disposition reconciliation remains with the
+ledger-followup-closure slice.
