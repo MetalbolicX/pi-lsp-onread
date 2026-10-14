@@ -192,3 +192,16 @@ R0–R4: **complete** on `feature/rust-compatibility-investigation`
 ledger-followup-closure slice reconciles the corrected F5/F8
 dispositions with the older records; the F5/F8 capability fix is its own
 future product slice, authorized separately.
+
+## Review record
+
+- Post-implementation assess (committed range, base
+  `e335b13d3f9dd8a9bfce20d73b230922b73a8109`): **medium risk**
+  (`executable_change`: `tests/unit/diagnostics/store.test.ts`),
+  2 paths / 144 lines, **reviewDue: false (`under_budget`)** — writer
+  self-verification stands (unit pins 15/15 focused; full battery on
+  final content: bare 508/49+3 skipped, lint/tsc/build/format clean,
+  gopls 8/8, rust-analyzer 8/8, pi-host 5/5, 0 orphans). No native
+  review started per entry rule; if a later reminder claims this
+  target, the tight base above applies. Commits: `dd4b08b` (unit pins)
+  + `74fb883` (this evidence).
