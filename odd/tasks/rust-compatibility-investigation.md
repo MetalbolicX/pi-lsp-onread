@@ -205,3 +205,12 @@ future product slice, authorized separately.
   review started per entry rule; if a later reminder claims this
   target, the tight base above applies. Commits: `dd4b08b` (unit pins)
   + `74fb883` (this evidence).
+- RDD reminder (target `sha256:0e418ba6…`) later claimed the slice:
+  **APPROVED — ZERO findings** — lineage `review-18abaadc3f68be9c`,
+  medium (`executable_change`: `tests/unit/diagnostics/store.test.ts`),
+  `review-reliability` lens, 2 paths / 157 lines, correction budget 79,
+  tight base `e335b13d3f9…` (committedOnly; candidate `dd4b08b` +
+  `74fb883` + `1b9c038`). Reviewer forecast (1 host-relay run)
+  acknowledged; approved on the last admitted event; acknowledgement
+  burned (consumed revision `sha256:8c867c8d…`). Delivery: ordinary
+  repository policy.
