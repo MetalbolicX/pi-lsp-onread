@@ -72,7 +72,7 @@ is required.
 - [x] Ledger row dispositioned **fixed** with this evidence
       (`hardening-ledger.md`, prewarm session_start flake row).
 
-Status: **complete pending assess/review per RDD.** The defect is
+Status: **complete; reviewed and approved** (record below). The defect is
 closed at its root: the wait is outcome-based, the assertion
 unchanged, and 20× stress + 3× bare suite show no recurrence where the
 pre-fix rate was 1/10 isolated and 2/5 full-suite. Commit: `f98f3fe`
@@ -90,3 +90,13 @@ pre-fix rate was 1/10 isolated and 2/5 full-suite. Commit: `f98f3fe`
   a later reminder claims this target, the tight base above applies.
   Commits: `3fc7cb2` (plan) + `f98f3fe` (fix) + `509ab58`
   (disposition) + this record.
+
+- Native review (reminder-driven): a later reminder claimed target
+  `303d585e` (slice commits `3fc7cb2` / `f98f3fe` / `509ab58` /
+  `a2ea947` vs tight base
+  `1843c5f38c24084eaaca8ccbc630d1e15aed78d7`). Lineage
+  `review-d38e067818888ced`, **medium** (`executable_change`:
+  `prewarm.test.ts`), review-reliability lens (1 host-relay run):
+  **APPROVED, zero findings**, consumed
+  `sha256:80907f61ef4b8808625d6d39a49cb9b9770680fd3aedc7ff09b7a1ab1354b1d6`.
+  Nothing unreviewed remains for this slice.
